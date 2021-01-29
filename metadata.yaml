@@ -30,7 +30,7 @@ summary: >
   of on-disk persistence, and provides high availability via Redis Sentinel and
   automatic partitioning with Redis Cluster.
 
-  This charm supports high Redis 6 in Kubernetes environments, using k8s services
+  This charm supports Redis 6 in Kubernetes environments, using k8s services
   for load balancing.
 maintainers:
   - Redis Charm Maintainers <redis-charmers@lists.launchpad.net>

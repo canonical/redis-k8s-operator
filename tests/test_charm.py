@@ -21,9 +21,9 @@ from ops.model import \
     ActiveStatus, WaitingStatus, MaintenanceStatus, BlockedStatus
 from ops.testing import Harness
 
-from charm import RedisCharm
-from client import RedisClient
-from pod_spec import PodSpecBuilder
+from src.charm import RedisCharm
+from src.client import RedisClient
+from src.pod_spec import PodSpecBuilder
 
 
 class TestCharm(unittest.TestCase):

@@ -23,8 +23,8 @@ from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 
-from client import RedisClient
-from pod_spec import PodSpecBuilder
+from src.client import RedisClient
+from src.pod_spec import PodSpecBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,7 @@ class RedisCharm(CharmBase):
     def on_stop(self, _):
         """Mark terminating unit as inactive
         """
+        self.redis.close()
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
     def configure_pod(self, _):

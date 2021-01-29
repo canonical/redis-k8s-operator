@@ -24,12 +24,20 @@ class RedisClient:
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
+        self.redis: redis.Redis = None
 
     def is_ready(self) -> bool:
         try:
-            redis.Redis(host=self.host, port=self.port)
-            logger.debug("Redis service is ready.")
-            return True
+            self.redis = redis.Redis(host=self.host, port=self.port)
+            if self.redis.ping():
+                logger.debug("We can ping Redis, service is ready.")
+                return True
+            logger.debug("Not able to ping Redis.")
+            return False
         except redis.exceptions.ConnectionError as exc:
             logger.warning("Unable to connect to Redis: {}".format(exc))
         return False
+
+    def close(self):
+        if self.redis:
+            self.redis.client().close()
