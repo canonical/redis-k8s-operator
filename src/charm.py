@@ -57,7 +57,7 @@ class RedisCharm(CharmBase):
         """
         logger.debug("Running on_start")
         if not self.unit.is_leader():
-            self.unit.status = ActiveStatus('Pod is ready.')
+            self.unit.status = ActiveStatus()
             return
 
         if not self.redis.is_ready():
@@ -83,7 +83,7 @@ class RedisCharm(CharmBase):
 
         if not self.unit.is_leader():
             logger.debug("Spec changes ignored by non-leader")
-            self.unit.status = ActiveStatus('Pod is ready.')
+            self.unit.status = ActiveStatus()
             return
 
         msg = 'Configuring pod.'
@@ -129,7 +129,7 @@ class RedisCharm(CharmBase):
         - Ready
         """
         if not self.unit.is_leader():
-            self.unit.status = ActiveStatus('Pod is ready.')
+            self.unit.status = ActiveStatus()
             return
 
         if not self.redis.is_ready():
@@ -139,10 +139,9 @@ class RedisCharm(CharmBase):
         self.pod_is_ready()
 
     def pod_is_ready(self):
-        status_message = 'Pod is ready.'
-        logger.debug(status_message)
-        self.unit.status = ActiveStatus(status_message)
-        self.app.status = ActiveStatus('Redis is ready.')
+        logger.debug('Pod is ready.')
+        self.unit.status = ActiveStatus()
+        self.app.status = ActiveStatus()
 
     @property
     def redis(self):

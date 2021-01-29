@@ -46,7 +46,7 @@ class TestCharm(unittest.TestCase):
         # Then
         self.assertEqual(
             self.harness.charm.unit.status,
-            ActiveStatus('Pod is ready.')
+            ActiveStatus()
         )
 
     @mock.patch.object(RedisClient, 'is_ready')
@@ -74,7 +74,7 @@ class TestCharm(unittest.TestCase):
         is_ready.assert_called_once_with()
         self.assertEqual(
             self.harness.charm.unit.status,
-            ActiveStatus('Pod is ready.')
+            ActiveStatus()
         )
 
     def test_on_stop(self):
@@ -94,7 +94,7 @@ class TestCharm(unittest.TestCase):
         # Then
         self.assertEqual(
             self.harness.charm.unit.status,
-            ActiveStatus('Pod is ready.')
+            ActiveStatus()
         )
 
     def test_on_config_changed_when_unit_is_leader(self):
@@ -106,7 +106,7 @@ class TestCharm(unittest.TestCase):
         self.assertIsNotNone(self.harness.charm.state.pod_spec)
         self.assertEqual(
             self.harness.charm.unit.status,
-            ActiveStatus('Pod is ready.')
+            ActiveStatus()
         )
 
     @mock.patch.object(OCIImageResource, 'fetch')
@@ -131,7 +131,7 @@ class TestCharm(unittest.TestCase):
         # Then
         self.assertEqual(
             self.harness.charm.unit.status,
-            ActiveStatus('Pod is ready.')
+            ActiveStatus()
         )
 
     @mock.patch.object(RedisClient, 'is_ready')
@@ -159,5 +159,5 @@ class TestCharm(unittest.TestCase):
         is_ready.assert_called_once_with()
         self.assertEqual(
             self.harness.charm.unit.status,
-            ActiveStatus('Pod is ready.')
+            ActiveStatus()
         )
