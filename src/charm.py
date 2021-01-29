@@ -23,10 +23,11 @@ from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 
-from src.client import RedisClient
-from src.pod_spec import PodSpecBuilder
+from client import RedisClient
+from log_adapter import CustomAdapter
+from pod_spec import PodSpecBuilder
 
-logger = logging.getLogger(__name__)
+logger = CustomAdapter(logging.getLogger(__name__), {'prefix': 'redis-operator:charm'})
 
 # We expect the redis container to use the default port
 DEFAULT_PORT = 6379
@@ -37,7 +38,7 @@ class RedisCharm(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.log_debug('Initializing charm')
+        logger.debug('Initializing charm')
 
         self.state.set_default(pod_spec=None)
 
@@ -54,7 +55,7 @@ class RedisCharm(CharmBase):
 
         This event handler is deferred if initialization of Redis fails.
         """
-        self.log_debug("Running on_start")
+        logger.debug("Running on_start")
         if not self.unit.is_leader():
             self.unit.status = ActiveStatus('Pod is ready.')
             return
@@ -62,12 +63,12 @@ class RedisCharm(CharmBase):
         if not self.redis.is_ready():
             msg = 'Waiting for Redis ...'
             self.unit.status = WaitingStatus(msg)
-            self.log_debug(msg)
+            logger.debug(msg)
             event.defer()
             return
 
         self.pod_is_ready()
-        self.log_debug("Running on_start finished")
+        logger.debug("Running on_start finished")
 
     def on_stop(self, _):
         """Mark terminating unit as inactive
@@ -75,18 +76,25 @@ class RedisCharm(CharmBase):
         self.redis.close()
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
-    def configure_pod(self, _):
+    def configure_pod(self, event):
         """Applies the pod configuration
         """
-        self.log_debug("Running configure_pod")
+        logger.debug("Running configure_pod")
 
         if not self.unit.is_leader():
-            self.log_debug("Spec changes ignored by non-leader")
+            logger.debug("Spec changes ignored by non-leader")
             self.unit.status = ActiveStatus('Pod is ready.')
             return
 
+        if not self.redis.is_ready():
+            msg = 'Waiting for Redis ...'
+            self.unit.status = WaitingStatus(msg)
+            logger.debug(msg)
+            event.defer()
+            return
+
         msg = 'Configuring pod.'
-        self.log_debug(msg)
+        logger.debug(msg)
         self.unit.status = WaitingStatus(msg)
 
         # Fetch image information
@@ -106,19 +114,19 @@ class RedisCharm(CharmBase):
         )
 
         spec = builder.build_pod_spec()
-        self.log_debug(f"Pod spec:\n{yaml.dump(spec)}\n")
+        logger.debug(f"Pod spec:\n{yaml.dump(spec)}\n")
 
         # Update pod spec if the generated one is different
         # from the one previously applied
         if self.state.pod_spec == spec:
-            self.log_debug("Discarding pod spec because it has not changed.")
+            logger.debug("Discarding pod spec because it has not changed.")
         else:
-            self.log_debug("Applying new pod spec.")
+            logger.debug("Applying new pod spec.")
             self.model.pod.set_spec(spec)
             self.state.pod_spec = spec
 
         self.pod_is_ready()
-        self.log_debug("Running configure_pod finished")
+        logger.debug("Running configure_pod finished")
 
     def update_status(self, _):
         """Set status for all units
@@ -139,13 +147,9 @@ class RedisCharm(CharmBase):
 
     def pod_is_ready(self):
         status_message = 'Pod is ready.'
-        self.log_debug(status_message)
+        logger.debug(status_message)
         self.unit.status = ActiveStatus(status_message)
         self.app.status = ActiveStatus('Redis is ready.')
-
-    @staticmethod
-    def log_debug(message: str):
-        logger.debug("[Redis] {}".format(message))
 
     @property
     def redis(self):

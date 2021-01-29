@@ -7,6 +7,8 @@ store, used as a database, cache, and message broker. This repository contains a
 [Juju](https://jaas.ai/) Charm for deploying Redis on Kubernetes
 clusters.
 
+This charm does not support Redis clustering capabilities.
+
 ## Setup, build and deploy
 
 A typical setup using [snaps](https://snapcraft.io/), for deployments
@@ -21,7 +23,8 @@ following commands:
     charmcraft build
     juju deploy ./redis.charm --resource redis-image=redis:6.0
 
-To access Redis you run:
+Once Redis starts up it will be running on its default port, 6379. 
+To check it you run:
 
     juju status
 
@@ -30,11 +33,11 @@ to discover the IP Redis is running behind. The output will have lines like:
     Unit       Workload    Agent  Address       Ports     Message
     redis/20   active      idle   10.1.168.69   6379/TCP  Pod is ready.
 
-Then you can:
+Then, from your local machine, you can:
 
     redis-cli -h 10.1.168.69 -p 3000
 
-Another option is to port-forward the Redis service (or pod) port from k8s to a local port.
+Another option is to port-forward the Redis pod or service port from k8s to a local port.
 For example, forwarding a node's port
 
     microk8s.kubectl --namespace=redis-model port-forward pod/redis-8485b69dfd-6hgvj 6379:6379
@@ -46,6 +49,9 @@ However, it is simpler to forward the service port as it will abstract the node 
 Then you can simply:
 
     redis-cli
+
+From a k8s non-charmed scenario Redis will be exposed as `Service` named `redis` on the default
+port 6379.
 
 ## Developing
 

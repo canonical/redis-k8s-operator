@@ -15,10 +15,12 @@
 
 from typing import Dict, List
 
-from charmhelpers.core import hookenv
-
 
 class PodSpecBuilder:
+    """
+    This class provides the methods to build the pod spec.
+    """
+
     def __init__(
             self,
             name: str,
@@ -34,9 +36,11 @@ class PodSpecBuilder:
     def build_pod_spec(self) -> Dict:
         """Set up and return our full pod spec."""
 
+        # TODO: If persistence is needed, configure it below and uncomment it
+        # in the spec dictionary
         # vol_config = [
         #     {"name": "charm-secrets", "mountPath": "/charm-secrets", "secret": {"name": "charm-secrets"}},
-        #     {"name": "var-run-postgresql", "mountPath": "/var/run/postgresql", "emptyDir": {"medium": "Memory"}},
+        #     {"name": "var-run-redis", "mountPath": "/var/run/redis", "emptyDir": {"medium": "Memory"}},
         # ]
 
         spec = {
@@ -46,7 +50,6 @@ class PodSpecBuilder:
                 "imageDetails": self.image_info,
                 "imagePullPolicy": "Always",
                 "ports": self._build_port_spec(),
-                "envConfig": self._build_env_conf_spec(),
                 # "volumeConfig": vol_config,
                 "kubernetes": {
                     "readinessProbe": self._build_readiness_spec(),
@@ -80,31 +83,3 @@ class PodSpecBuilder:
             "containerPort": self.port,
             "protocol": "TCP"
         }]
-
-    def _build_env_conf_spec(self) -> Dict:
-        config_fields = {
-            "JUJU_NODE_NAME": "spec.nodeName",
-            "JUJU_POD_NAME": "metadata.name",
-            "JUJU_POD_NAMESPACE": "metadata.namespace",
-            "JUJU_POD_IP": "status.podIP",
-        }
-        env_config = {k: {"field": {"path": p, "api-version": "v1"}} for k, p in config_fields.items()}
-
-        env_config["JUJU_EXPECTED_UNITS"] = " ".join(self.expected_units())
-        env_config["JUJU_APPLICATION"] = self.name
-
-        return env_config
-
-    @staticmethod
-    def expected_units() -> List[str]:
-        # Goal state looks like this:
-        #
-        # relations: {}
-        # units:
-        #   redis/0:
-        #     since: '2020-08-31 11:05:32Z'
-        #     status: active
-        #   redis/1:
-        #     since: '2020-08-31 11:05:54Z'
-        #     status: maintenance
-        return sorted(hookenv.goal_state().get("units", {}).keys(), key=lambda x: int(x.split("/")[-1]))
