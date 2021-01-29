@@ -86,13 +86,6 @@ class RedisCharm(CharmBase):
             self.unit.status = ActiveStatus('Pod is ready.')
             return
 
-        if not self.redis.is_ready():
-            msg = 'Waiting for Redis ...'
-            self.unit.status = WaitingStatus(msg)
-            logger.debug(msg)
-            event.defer()
-            return
-
         msg = 'Configuring pod.'
         logger.debug(msg)
         self.unit.status = WaitingStatus(msg)
