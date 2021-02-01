@@ -30,6 +30,9 @@ jobs:
         virtualenv -p python3 venv
         source venv/bin/activate
         pip install -r requirements-dev.txt
-    - name: Test
+    - name: Lint with flake8
+      run: |
+        flake8 .
+    - name: Running tests
       run: |
         ./run_tests

@@ -39,8 +39,9 @@ class PodSpecBuilder:
         # TODO: If persistence is needed, configure it below and uncomment it
         # in the spec dictionary
         # vol_config = [
-        #     {"name": "charm-secrets", "mountPath": "/charm-secrets", "secret": {"name": "charm-secrets"}},
-        #     {"name": "var-run-redis", "mountPath": "/var/run/redis", "emptyDir": {"medium": "Memory"}},
+        #   {"name": "var-run-redis",
+        #    "mountPath": "/var/run/redis",
+        #    "emptyDir": {"medium": "Memory"}}
         # ]
 
         spec = {
