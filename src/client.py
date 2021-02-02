@@ -30,7 +30,7 @@ class RedisClient:
 
     def is_ready(self) -> bool:
         try:
-            self.redis = redis.Redis(host=self.host, port=self.port)
+            self.redis = self._get_client()
             if self.redis.ping():
                 logger.debug("We can ping Redis, service is ready.")
                 return True
@@ -39,6 +39,9 @@ class RedisClient:
         except redis.exceptions.ConnectionError as exc:
             logger.warning("Unable to connect to Redis: {}".format(exc))
         return False
+
+    def _get_client(self) -> redis.Redis:
+        return redis.Redis(host=self.host, port=self.port)
 
     def close(self):
         if self.redis:

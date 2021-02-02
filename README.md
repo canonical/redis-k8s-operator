@@ -13,13 +13,25 @@ This charm does not support Redis clustering capabilities.
 
 A typical setup using [snaps](https://snapcraft.io/), for deployments
 to a [microk8s](https://microk8s.io/) cluster can be done using the
-following commands:
+following commands.
+
+Install the dependencies:
 
     sudo snap install juju --classic
     sudo snap install microk8s --classic
     microk8s.enable dns storage
+    
+Create a controller named `micro` into the cloud `microk8s`:
+  
     juju bootstrap microk8s micro
+
+In Juju, you interact with the client (the `juju` command on your local machine). 
+It connects to a controller. The controller is hosted on a cloud and controls models.
+
     juju add-model redis-model
+
+Then you build and deploy this charm into the model you just created:
+    
     charmcraft build
     juju deploy ./redis.charm --resource redis-image=redis:6.0
 
@@ -51,7 +63,7 @@ Then you can simply:
     redis-cli
 
 From a k8s non-charmed scenario Redis will be exposed as `Service` named `redis` on the default
-port 6379.
+port `6379`.
 
 ## Developing
 
