@@ -16,12 +16,13 @@
 import unittest
 from unittest import mock
 
-from charm import RedisCharm
-from client import RedisClient
 from oci_image import OCIImageResource, OCIImageResourceError
 from ops.model import \
     ActiveStatus, WaitingStatus, MaintenanceStatus, BlockedStatus
 from ops.testing import Harness
+
+from charm import RedisCharm
+from client import RedisClient
 
 
 class TestCharm(unittest.TestCase):
@@ -97,9 +98,11 @@ class TestCharm(unittest.TestCase):
             ActiveStatus()
         )
 
-    def test_on_config_changed_when_unit_is_leader(self):
+    @mock.patch.object(RedisClient, 'is_ready')
+    def test_on_config_changed_when_unit_is_leader_and_redis_is_ready(self, is_ready):
         # Given
         self.harness.set_leader(True)
+        is_ready.return_value = True
         # When
         self.harness.charm.on.config_changed.emit()
         # Then

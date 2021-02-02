@@ -27,6 +27,8 @@ from client import RedisClient
 from log_adapter import CustomAdapter
 from pod_spec import PodSpecBuilder
 
+WAITING_FOR_REDIS_MSG = 'Waiting for Redis ...'
+
 logger = CustomAdapter(logging.getLogger(__name__), {'prefix': 'redis-operator:charm'})
 
 # We expect the redis container to use the default port
@@ -61,9 +63,8 @@ class RedisCharm(CharmBase):
             return
 
         if not self.redis.is_ready():
-            msg = 'Waiting for Redis ...'
-            self.unit.status = WaitingStatus(msg)
-            logger.debug(msg)
+            self.unit.status = WaitingStatus(WAITING_FOR_REDIS_MSG)
+            logger.debug("{}: deferring on_start".format(WAITING_FOR_REDIS_MSG))
             event.defer()
             return
 
@@ -107,7 +108,7 @@ class RedisCharm(CharmBase):
         )
 
         spec = builder.build_pod_spec()
-        logger.debug(f"Pod spec:\n{yaml.dump(spec)}\n")
+        logger.debug("Pod spec: \n{}".format(yaml.dump(spec)))
 
         # Update pod spec if the generated one is different
         # from the one previously applied
@@ -117,6 +118,12 @@ class RedisCharm(CharmBase):
             logger.debug("Applying new pod spec.")
             self.model.pod.set_spec(spec)
             self.state.pod_spec = spec
+
+        if not self.redis.is_ready():
+            self.unit.status = WaitingStatus(WAITING_FOR_REDIS_MSG)
+            logger.debug("{}: deferring configure_pod".format(WAITING_FOR_REDIS_MSG))
+            event.defer()
+            return
 
         self.pod_is_ready()
         logger.debug("Running configure_pod finished")
@@ -133,7 +140,7 @@ class RedisCharm(CharmBase):
             return
 
         if not self.redis.is_ready():
-            self.unit.status = WaitingStatus('Waiting for Redis ...')
+            self.unit.status = WaitingStatus(WAITING_FOR_REDIS_MSG)
             return
 
         self.pod_is_ready()
