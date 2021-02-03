@@ -25,12 +25,11 @@ class TestClient(unittest.TestCase):
     def setUp(self) -> None:
         self.client = RedisClient("host", 1234)
 
-    @mock.patch.object(RedisClient, '_get_client')
     @mock.patch("redis.Redis")
-    def test_when_redis_can_ping_then_redis_is_ready(self, mock_redis, private_get_client):
+    def test_when_redis_can_ping_then_redis_is_ready(self, mock_redis):
         # Given
-        private_get_client.return_value = mock_redis
-        mock_redis.ping.return_value = True
+        redis_instance = mock_redis.return_value
+        redis_instance.ping.return_value = True
 
         # When
         is_ready = self.client.is_ready()
@@ -38,12 +37,11 @@ class TestClient(unittest.TestCase):
         # Then
         self.assertTrue(is_ready)
 
-    @mock.patch.object(RedisClient, '_get_client')
     @mock.patch("redis.Redis")
-    def test_when_redis_cannot_ping_then_redis_is_not_ready(self, mock_redis, private_get_client):
+    def test_when_redis_cannot_ping_then_redis_is_not_ready(self, mock_redis):
         # Given
-        private_get_client.return_value = mock_redis
-        mock_redis.ping.return_value = False
+        redis_instance = mock_redis.return_value
+        redis_instance.ping.return_value = False
 
         # When
         is_ready = self.client.is_ready()
@@ -51,10 +49,10 @@ class TestClient(unittest.TestCase):
         # Then
         self.assertFalse(is_ready)
 
-    @mock.patch.object(RedisClient, '_get_client')
-    def test_when_redis_fails_to_connect_then_redis_is_not_ready(self, private_get_client):
+    @mock.patch("redis.Redis")
+    def test_when_redis_fails_to_connect_then_redis_is_not_ready(self, mock_redis):
         # Given
-        private_get_client.side_effect = redis.exceptions.ConnectionError()
+        mock_redis.side_effect = redis.exceptions.ConnectionError()
 
         # When
         is_ready = self.client.is_ready()
