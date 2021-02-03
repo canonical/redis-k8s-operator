@@ -29,6 +29,11 @@ class RedisClient:
         self.redis: redis.Redis = None
 
     def is_ready(self) -> bool:
+        """Checks whether Redis is ready, no only accepting connections
+        but can also respond to a simple PING request.
+
+        :return: whether Redis is ready to be receive requests.
+        """
         try:
             self.redis = self._get_client()
             if self.redis.ping():

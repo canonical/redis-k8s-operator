@@ -53,7 +53,7 @@ class RedisCharm(CharmBase):
         self.framework.observe(self.on.update_status, self.update_status)
 
     def on_start(self, event):
-        """Initialize Redis
+        """Initialize Redis.
 
         This event handler is deferred if initialization of Redis fails.
         """
@@ -68,17 +68,17 @@ class RedisCharm(CharmBase):
             event.defer()
             return
 
-        self.pod_is_ready()
+        self.set_ready_status()
         logger.debug("Running on_start finished")
 
     def on_stop(self, _):
-        """Mark terminating unit as inactive
+        """Mark terminating unit as inactive.
         """
         self.redis.close()
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
     def configure_pod(self, event):
-        """Applies the pod configuration
+        """Applies the pod configuration.
         """
         logger.debug("Running configure_pod")
 
@@ -87,13 +87,8 @@ class RedisCharm(CharmBase):
             self.unit.status = ActiveStatus()
             return
 
-        msg = 'Configuring pod.'
-        logger.debug(msg)
-        self.unit.status = WaitingStatus(msg)
-
-        # Fetch image information
+        self.unit.status = WaitingStatus("Fetching image information ...")
         try:
-            self.unit.status = WaitingStatus("Fetching image information ...")
             image_info = self.image.fetch()
         except OCIImageResourceError:
             self.unit.status = BlockedStatus(
@@ -111,7 +106,7 @@ class RedisCharm(CharmBase):
         logger.debug("Pod spec: \n{}".format(yaml.dump(spec)))
 
         # Update pod spec if the generated one is different
-        # from the one previously applied
+        # from the one previously applied.
         if self.state.pod_spec == spec:
             logger.debug("Discarding pod spec because it has not changed.")
         else:
@@ -125,11 +120,11 @@ class RedisCharm(CharmBase):
             event.defer()
             return
 
-        self.pod_is_ready()
+        self.set_ready_status()
         logger.debug("Running configure_pod finished")
 
     def update_status(self, _):
-        """Set status for all units
+        """Set status for all units.
 
         Status may be
         - Redis API server not reachable (service is not ready),
@@ -143,9 +138,9 @@ class RedisCharm(CharmBase):
             self.unit.status = WaitingStatus(WAITING_FOR_REDIS_MSG)
             return
 
-        self.pod_is_ready()
+        self.set_ready_status()
 
-    def pod_is_ready(self):
+    def set_ready_status(self):
         logger.debug('Pod is ready.')
         self.unit.status = ActiveStatus()
         self.app.status = ActiveStatus()

@@ -67,7 +67,8 @@ port `6379`.
 
 ## Developing
 
-Create and activate a virtualenv with the development requirements:
+The charm is based on the [operator framework](https://github.com/canonical/operator/). Create and activate 
+a virtualenv with the development requirements:
 
     virtualenv -p python3 venv
     source venv/bin/activate

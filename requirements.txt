@@ -11,12 +11,11 @@
 # PURPOSE.  See the GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-ops~=1.1.0
-redis~=3.5.3
-
-PyYAML~=5.4.1
 charmhelpers~=0.20.20
-pytest
 git+https://github.com/juju-solutions/resource-oci-image#egg=oci-image
+ops~=1.1.0
+pytest~=6.2.2
+PyYAML~=5.4.1
+redis~=3.5.3
