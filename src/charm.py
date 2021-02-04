@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+import functools
 import logging
 
 import yaml
@@ -35,6 +36,18 @@ logger = CustomAdapter(logging.getLogger(__name__), {'prefix': 'redis-operator:c
 DEFAULT_PORT = 6379
 
 
+def log_event_handler(method):
+    @functools.wraps(method)
+    def decorated(self, event):
+        logger.debug("Running {}".format(method.__name__))
+        try:
+            return method(self, event)
+        finally:
+            logger.debug("Completed {}".format(method.__name__))
+
+    return decorated
+
+
 class RedisCharm(CharmBase):
     state = StoredState()
 
@@ -44,6 +57,7 @@ class RedisCharm(CharmBase):
 
         self.state.set_default(pod_spec=None)
 
+        self.redis = RedisClient(host=self.model.app.name, port=DEFAULT_PORT)
         self.image = OCIImageResource(self, "redis-image")
 
         self.framework.observe(self.on.start, self.on_start)
@@ -52,12 +66,12 @@ class RedisCharm(CharmBase):
         self.framework.observe(self.on.upgrade_charm, self.configure_pod)
         self.framework.observe(self.on.update_status, self.update_status)
 
+    @log_event_handler
     def on_start(self, event):
         """Initialize Redis.
 
         This event handler is deferred if initialization of Redis fails.
         """
-        logger.debug("Running on_start")
         if not self.unit.is_leader():
             self.unit.status = ActiveStatus()
             return
@@ -69,19 +83,18 @@ class RedisCharm(CharmBase):
             return
 
         self.set_ready_status()
-        logger.debug("Running on_start finished")
 
+    @log_event_handler
     def on_stop(self, _):
         """Mark terminating unit as inactive.
         """
         self.redis.close()
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
+    @log_event_handler
     def configure_pod(self, event):
         """Applies the pod configuration.
         """
-        logger.debug("Running configure_pod")
-
         if not self.unit.is_leader():
             logger.debug("Spec changes ignored by non-leader")
             self.unit.status = ActiveStatus()
@@ -121,8 +134,8 @@ class RedisCharm(CharmBase):
             return
 
         self.set_ready_status()
-        logger.debug("Running configure_pod finished")
 
+    @log_event_handler
     def update_status(self, _):
         """Set status for all units.
 
@@ -144,12 +157,6 @@ class RedisCharm(CharmBase):
         logger.debug('Pod is ready.')
         self.unit.status = ActiveStatus()
         self.app.status = ActiveStatus()
-
-    @property
-    def redis(self):
-        """Return a Redis API client
-        """
-        return RedisClient(host=self.model.app.name, port=DEFAULT_PORT)
 
 
 if __name__ == "__main__":
