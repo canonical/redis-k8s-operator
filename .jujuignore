@@ -1,0 +1,6 @@
+/venv
+*.py[cod]
+*.charm
+build/
+__pycache__
+.idea

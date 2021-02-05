@@ -1,0 +1,52 @@
+# This file is part of the Redis k8s Charm for Juju.
+# Copyright 2021 Canonical Ltd.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3, as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranties of
+# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
+# PURPOSE.  See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+name: redis
+display-name: Redis
+description: >
+  Redis charm for Kubernetes deployments.
+tags:
+  - databases
+  - kubernetes
+  - redis
+summary: >
+  Redis is an open source (BSD licensed), in-memory data structure store, used
+  as a database, cache, and message broker. Redis provides data structures
+  such as strings, hashes, lists, sets, sorted sets with range queries,
+  bitmaps, hyperloglogs, geospatial indexes, and streams. Redis has built-in
+  replication, Lua scripting, LRU eviction, transactions, and different levels
+  of on-disk persistence, and provides high availability via Redis Sentinel and
+  automatic partitioning with Redis Cluster.
+
+  This charm supports Redis 6 in Kubernetes environments, using k8s services
+  for load balancing. This charm does not support Redis clustering capabilities.
+maintainers:
+  - Eduardo Mucelli R. Oliveira <eduardo.mucelli@canonical.com>
+min-juju-version: 2.8.7
+series:
+  - kubernetes
+deployment:
+  min-version: '1.16'
+  type: stateful
+  service: loadbalancer
+storage:
+  database:
+    type: filesystem
+    location: /var/opt/redis
+resources:
+  redis-image:
+    type: oci-image
+    description: upstream docker image for redis
+    upstream-source: 'redis:6.0'
