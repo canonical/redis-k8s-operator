@@ -30,11 +30,7 @@ class TestCharm(unittest.TestCase):
         self.harness = Harness(RedisCharm)
         self.addCleanup(self.harness.cleanup)
         redis_resource = {
-            "registrypath": "redis:6.0",
-            # "username" and "password" are useless, but oci-resource
-            # library fetch() fails if we do not provide them ...
-            "username": "",
-            "password": ""
+            "registrypath": "redis:6.0"
         }
         self.harness.add_oci_resource("redis-image", redis_resource)
         self.harness.begin()
@@ -163,3 +159,17 @@ class TestCharm(unittest.TestCase):
             self.harness.charm.unit.status,
             ActiveStatus()
         )
+
+    def test_on_relation_changed_status_when_unit_is_leader(self):
+        # Given
+        self.harness.set_leader(True)
+        rel_id = self.harness.add_relation('datastore', 'wordpress')
+        self.harness.add_relation_unit(rel_id, 'wordpress/0')
+        # When
+        self.harness.update_relation_data(rel_id,'wordpress/0', {})
+        rel_data = self.harness.get_relation_data(
+            rel_id, self.harness.charm.unit.name
+        )
+        # Then
+        self.assertEqual(rel_data.get('host'), 'redis')
+        self.assertEqual(rel_data.get('port'), '6379')

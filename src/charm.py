@@ -63,6 +63,7 @@ class RedisCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self.configure_pod)
         self.framework.observe(self.on.upgrade_charm, self.configure_pod)
         self.framework.observe(self.on.update_status, self.update_status)
+        self.framework.observe(self.on["datastore"].relation_changed, self.relation_changed)
 
     @log_event_handler
     def on_start(self, event):
@@ -145,6 +146,17 @@ class RedisCharm(CharmBase):
             return
 
         self.set_ready_status()
+
+    @log_event_handler
+    def relation_changed(self, event):
+        """This event handler pass the host and port to the remote unit
+        """
+        if not self.unit.is_leader():
+            logger.debug("Relation changes ignored by non-leader")
+            return
+
+        event.relation.data[self.unit]['host'] = self.app.name
+        event.relation.data[self.unit]['port'] = str(DEFAULT_PORT)
 
     def set_ready_status(self):
         logger.debug('Pod is ready.')

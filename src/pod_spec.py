@@ -52,6 +52,7 @@ class PodSpecBuilder:
                 "imagePullPolicy": "Always",
                 "ports": self._build_port_spec(),
                 # "volumeConfig": vol_config,
+                "envConfig": self._build_env_config(),
                 "kubernetes": {
                     "readinessProbe": self._build_readiness_spec(),
                     "livenessProbe": self._build_liveness_spec()
@@ -61,6 +62,11 @@ class PodSpecBuilder:
         }
 
         return spec
+
+    def _build_env_config(self):
+        return {
+            "ALLOW_EMPTY_PASSWORD": "yes"
+        }
 
     def _build_liveness_spec(self) -> Dict:
         return {
