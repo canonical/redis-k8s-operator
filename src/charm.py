@@ -149,8 +149,15 @@ class RedisCharm(CharmBase):
 
     @log_event_handler
     def relation_changed(self, event):
-        """This event handler pass the host and port to the remote unit
+        """This event handler pass the host and port to the remote unit.
+         Any Redis client is provided with the following information
+        - Redis host
+        - Redis port
+
+        Using this information a client can establish a connection with
+        Redis, for instances using the redis Python library.
         """
+
         if not self.unit.is_leader():
             logger.debug("Relation changes ignored by non-leader")
             return

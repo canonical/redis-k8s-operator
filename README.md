@@ -16,3 +16,4 @@ and [this](https://github.com/canonical/redis-operator/issues/3) issues, respect
 
 # Usage
 
+    juju deploy redis

@@ -1,15 +1,4 @@
-# redis-operator
-
-## Description
-
-The [Redis](https://www.redis.io/) operator provides in-memory data structure 
-store, used as a database, cache, and message broker. This repository contains a
-[Juju](https://jaas.ai/) Charm for deploying Redis on Kubernetes
-clusters.
-
-This charm does not support Redis clustering capabilities.
-
-## Setup, build and deploy
+# Setup, build and deploy
 
 A typical setup using [snaps](https://snapcraft.io/), for deployments
 to a [microk8s](https://microk8s.io/) cluster can be done using the
