@@ -30,7 +30,7 @@ class TestCharm(unittest.TestCase):
         self.harness = Harness(RedisCharm)
         self.addCleanup(self.harness.cleanup)
         redis_resource = {
-            "registrypath": "redis:6.0"
+            "registrypath": "ubuntu/redis"
         }
         self.harness.add_oci_resource("redis-image", redis_resource)
         self.harness.begin()

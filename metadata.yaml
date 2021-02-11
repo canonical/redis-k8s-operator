@@ -32,8 +32,8 @@ summary: >
   automatic partitioning with Redis Cluster.
 
   This charm supports Redis 5 in Kubernetes environments, using k8s services
-  for load balancing. This supports simple Redis topology. Although multiple
-  units are allowed, nor replication nor clustering are supported for the moment.
+  for load balancing. This supports a simple Redis topology. Although multiple
+  units are allowed, replication and clustering are not supported for the moment.
 maintainers:
   - Eduardo Mucelli R. Oliveira <eduardo.mucelli@canonical.com>
 min-juju-version: 2.8.7

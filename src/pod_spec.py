@@ -65,6 +65,7 @@ class PodSpecBuilder:
 
     def _build_env_config(self):
         return {
+            # https://github.com/canonical/redis-operator/issues/7
             "ALLOW_EMPTY_PASSWORD": "yes"
         }
 
