@@ -22,7 +22,7 @@ It connects to a controller. The controller is hosted on a cloud and controls mo
 Then you build and deploy this charm into the model you just created:
     
     charmcraft build
-    juju deploy ./redis.charm --resource redis-image=redis:6.0
+    juju deploy ./redis.charm --resource redis-image=ubuntu/redis
 
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:
@@ -36,7 +36,7 @@ to discover the IP Redis is running behind. The output will have lines like:
 
 Then, from your local machine, you can:
 
-    redis-cli -h 10.1.168.69 -p 3000
+    redis-cli -h 10.1.168.69 -p 6379
 
 Another option is to port-forward the Redis pod or service port from k8s to a local port.
 For example, forwarding a node's port
