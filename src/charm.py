@@ -55,8 +55,6 @@ class RedisCharm(CharmBase):
         super().__init__(*args)
         logger.debug('Initializing charm')
 
-        self.state.set_default(pod_spec=None)
-
         self.redis = RedisClient(host=self.model.app.name, port=DEFAULT_PORT)
         self.image = OCIImageResource(self, "redis-image")
 
@@ -118,14 +116,9 @@ class RedisCharm(CharmBase):
         spec = builder.build_pod_spec()
         logger.debug("Pod spec: \n{}".format(yaml.dump(spec)))
 
-        # Update pod spec if the generated one is different
-        # from the one previously applied.
-        if self.state.pod_spec == spec:
-            logger.debug("Discarding pod spec because it has not changed.")
-        else:
-            logger.debug("Applying new pod spec.")
-            self.model.pod.set_spec(spec)
-            self.state.pod_spec = spec
+        # Applying pod spec. If the spec hasn't changed, this has no effect.
+        logger.debug("Applying pod spec.")
+        self.model.pod.set_spec(spec)
 
         if not self.redis.is_ready():
             self.unit.status = WaitingStatus(WAITING_FOR_REDIS_MSG)

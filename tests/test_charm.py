@@ -106,7 +106,6 @@ class TestCharm(unittest.TestCase):
         # When
         self.harness.charm.on.config_changed.emit()
         # Then
-        self.assertIsNotNone(self.harness.charm.state.pod_spec)
         self.assertEqual(
             self.harness.charm.unit.status,
             ActiveStatus()
