@@ -162,8 +162,18 @@ class RedisCharm(CharmBase):
             logger.debug("Relation changes ignored by non-leader")
             return
 
-        event.relation.data[self.unit]['host'] = self.app.name
+        event.relation.data[self.unit]['hostname'] = str(self.bind_address(event))
         event.relation.data[self.unit]['port'] = str(DEFAULT_PORT)
+        # The reactive Redis charm exposes also 'password'. When tackling
+        # https://github.com/canonical/redis-operator/issues/7 add 'password'
+        # field so that it matches the exposed interface information from it.
+        # event.relation.data[self.unit]['password'] = ''
+
+    def bind_address(self, event):
+        relation = self.model.get_relation(event.relation.name, event.relation.id)
+        if address := self.model.get_binding(relation).network.bind_address:
+            return address
+        return self.app.name
 
     def set_ready_status(self):
         logger.debug('Pod is ready.')

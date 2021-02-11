@@ -160,16 +160,19 @@ class TestCharm(unittest.TestCase):
             ActiveStatus()
         )
 
-    def test_on_relation_changed_status_when_unit_is_leader(self):
+    @mock.patch.object(RedisCharm, 'bind_address')
+    def test_on_relation_changed_status_when_unit_is_leader(self, bind_address):
         # Given
         self.harness.set_leader(True)
+        bind_address.return_value = '10.2.1.5'
+
         rel_id = self.harness.add_relation('datastore', 'wordpress')
         self.harness.add_relation_unit(rel_id, 'wordpress/0')
         # When
-        self.harness.update_relation_data(rel_id,'wordpress/0', {})
+        self.harness.update_relation_data(rel_id, 'wordpress/0', {})
         rel_data = self.harness.get_relation_data(
             rel_id, self.harness.charm.unit.name
         )
         # Then
-        self.assertEqual(rel_data.get('host'), 'redis')
+        self.assertEqual(rel_data.get('hostname'), '10.2.1.5')
         self.assertEqual(rel_data.get('port'), '6379')
