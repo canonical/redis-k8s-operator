@@ -55,7 +55,11 @@ class TestClient(unittest.TestCase):
         mock_redis.side_effect = redis.exceptions.ConnectionError()
 
         # When
-        is_ready = self.client.is_ready()
+        with self.assertLogs(level="WARNING") as logger:
+            is_ready = self.client.is_ready()
 
-        # Then
-        self.assertFalse(is_ready)
+            # Then
+            self.assertFalse(is_ready)
+            self.assertEqual(
+                logger.output,
+                ["WARNING:client:[redis-operator:client] Unable to connect to Redis: "])
