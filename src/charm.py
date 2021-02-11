@@ -55,8 +55,6 @@ class RedisCharm(CharmBase):
         super().__init__(*args)
         logger.debug('Initializing charm')
 
-        self.state.set_default(pod_spec=None)
-
         self.redis = RedisClient(host=self.model.app.name, port=DEFAULT_PORT)
         self.image = OCIImageResource(self, "redis-image")
 
