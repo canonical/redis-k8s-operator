@@ -18,7 +18,8 @@ display-name: Redis
 description: >
   Redis charm for Kubernetes deployments.
 tags:
-  - databases
+  - database
+  - storage
   - kubernetes
   - redis
 summary: >
@@ -30,8 +31,9 @@ summary: >
   of on-disk persistence, and provides high availability via Redis Sentinel and
   automatic partitioning with Redis Cluster.
 
-  This charm supports Redis 6 in Kubernetes environments, using k8s services
-  for load balancing. This charm does not support Redis clustering capabilities.
+  This charm supports Redis 5 in Kubernetes environments, using k8s services
+  for load balancing. This supports a simple Redis topology. Although multiple
+  units are allowed, replication and clustering are not supported for the moment.
 maintainers:
   - Eduardo Mucelli R. Oliveira <eduardo.mucelli@canonical.com>
 min-juju-version: 2.8.7
@@ -41,6 +43,9 @@ deployment:
   min-version: '1.16'
   type: stateful
   service: loadbalancer
+provides:
+  datastore:
+    interface: redis
 storage:
   database:
     type: filesystem
@@ -48,5 +53,5 @@ storage:
 resources:
   redis-image:
     type: oci-image
-    description: upstream docker image for redis
-    upstream-source: 'redis:6.0'
+    description: ubuntu lts docker image for redis
+    upstream-source: 'ubuntu/redis'
