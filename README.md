@@ -19,7 +19,7 @@ and [this](https://github.com/canonical/redis-operator/issues/3) issues, respect
 While this charm is not in the charmstore/charmhub you can build and deploy it locally by:
 
     charmcraft build
-    juju deploy ./redis.charm --resource redis-image=ubuntu/redis
+    juju deploy ./redis-k8s.charm --resource redis-image=ubuntu/redis
 
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:
@@ -28,8 +28,8 @@ To check it you run:
 
 to discover the IP Redis is running behind. The output will have lines like:
 
-    Unit       Workload    Agent  Address       Ports     Message
-    redis/20   active      idle   10.1.168.69   6379/TCP  Pod is ready.
+    Unit           Workload    Agent  Address       Ports     Message
+    redis-k8s/20   active      idle   10.1.168.69   6379/TCP  Pod is ready.
 
 Then, from your local machine, you can:
 
