@@ -17,11 +17,11 @@ import unittest
 from unittest import mock
 
 from oci_image import OCIImageResource, OCIImageResourceError
-from ops.model import \
-    ActiveStatus, WaitingStatus, MaintenanceStatus, BlockedStatus
+from ops.model import ActiveStatus, WaitingStatus, MaintenanceStatus, BlockedStatus
 from ops.testing import Harness
 
 from charm import RedisCharm
+from charms.redis_k8s.v0.redis import RedisProvides
 from client import RedisClient
 
 
@@ -160,13 +160,13 @@ class TestCharm(unittest.TestCase):
             ActiveStatus()
         )
 
-    @mock.patch.object(RedisCharm, 'bind_address')
+    @mock.patch.object(RedisProvides, '_bind_address')
     def test_on_relation_changed_status_when_unit_is_leader(self, bind_address):
         # Given
         self.harness.set_leader(True)
         bind_address.return_value = '10.2.1.5'
 
-        rel_id = self.harness.add_relation('datastore', 'wordpress')
+        rel_id = self.harness.add_relation('redis', 'wordpress')
         self.harness.add_relation_unit(rel_id, 'wordpress/0')
         # When
         self.harness.update_relation_data(rel_id, 'wordpress/0', {})

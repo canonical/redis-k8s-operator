@@ -45,7 +45,7 @@ deployment:
   type: stateful
   service: loadbalancer
 provides:
-  datastore:
+  redis:
     interface: redis
 storage:
   database:

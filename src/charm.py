@@ -18,6 +18,8 @@ import functools
 import logging
 
 import yaml
+
+from charms.redis_k8s.v0.redis import RedisProvides
 from oci_image import OCIImageResource, OCIImageResourceError
 from ops.charm import CharmBase
 from ops.framework import StoredState
@@ -56,6 +58,7 @@ class RedisCharm(CharmBase):
         logger.debug('Initializing charm')
 
         self.redis = RedisClient(host=self.model.app.name, port=DEFAULT_PORT)
+        self.redis_provides = RedisProvides(self, port=DEFAULT_PORT)
         self.image = OCIImageResource(self, "redis-image")
 
         self.framework.observe(self.on.start, self.on_start)
@@ -63,7 +66,6 @@ class RedisCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self.configure_pod)
         self.framework.observe(self.on.upgrade_charm, self.configure_pod)
         self.framework.observe(self.on.update_status, self.update_status)
-        self.framework.observe(self.on["datastore"].relation_changed, self.relation_changed)
 
     @log_event_handler
     def on_start(self, event):
@@ -146,34 +148,6 @@ class RedisCharm(CharmBase):
             return
 
         self.set_ready_status()
-
-    @log_event_handler
-    def relation_changed(self, event):
-        """This event handler pass the host and port to the remote unit.
-         Any Redis client is provided with the following information
-        - Redis host
-        - Redis port
-
-        Using this information a client can establish a connection with
-        Redis, for instances using the redis Python library.
-        """
-
-        if not self.unit.is_leader():
-            logger.debug("Relation changes ignored by non-leader")
-            return
-
-        event.relation.data[self.unit]['hostname'] = str(self.bind_address(event))
-        event.relation.data[self.unit]['port'] = str(DEFAULT_PORT)
-        # The reactive Redis charm exposes also 'password'. When tackling
-        # https://github.com/canonical/redis-operator/issues/7 add 'password'
-        # field so that it matches the exposed interface information from it.
-        # event.relation.data[self.unit]['password'] = ''
-
-    def bind_address(self, event):
-        relation = self.model.get_relation(event.relation.name, event.relation.id)
-        if address := self.model.get_binding(relation).network.bind_address:
-            return address
-        return self.app.name
 
     def set_ready_status(self):
         logger.debug('Pod is ready.')
