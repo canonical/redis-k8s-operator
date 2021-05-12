@@ -36,16 +36,17 @@ logger = logging.getLogger(__name__)
 
 
 class RedisRelationUpdatedEvent(EventBase):
-    pass
+    """An event for the redis relation having been updated."""
 
 
 class RedisRelationCharmEvents(CharmEvents):
+    """A class to carry custom charm events so requires can react to relation changes."""
     redis_relation_updated = EventSource(RedisRelationUpdatedEvent)
 
 
 class RedisRequires(Object):
     def __init__(self, charm, _stored):
-        # Define a constructor that takes the charm and it's StoredState
+        """A class implementing the redis requires relation."""
         super().__init__(charm, "redis")
         self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
         self.framework.observe(charm.on.redis_relation_broken, self._on_relation_broken)
@@ -53,6 +54,7 @@ class RedisRequires(Object):
         self.charm = charm
 
     def _on_relation_changed(self, event):
+        """Handle the relation changed event."""
         if not event.unit:
             return
 
@@ -65,6 +67,7 @@ class RedisRequires(Object):
         self.charm.on.redis_relation_updated.emit()
 
     def _on_relation_broken(self, event):
+        """Handle the relation broken event."""
         # Remove the unit data from local state
         self._stored.redis_relation.pop(event.relation.id, None)
 
@@ -74,11 +77,13 @@ class RedisRequires(Object):
 
 class RedisProvides(Object):
     def __init__(self, charm, port):
+        """A class implementing the redis provides relation."""
         super().__init__(charm, "redis")
         self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
         self._port = port
 
     def _on_relation_changed(self, event):
+        """Handle the relation changed event."""
         if not self.model.unit.is_leader():
             logger.debug("Relation changes ignored by non-leader")
             return
@@ -91,6 +96,7 @@ class RedisProvides(Object):
         # event.relation.data[self.unit]['password'] = ''
 
     def _bind_address(self, event):
+        """Convenience function for getting the unit address."""
         relation = self.model.get_relation(event.relation.name, event.relation.id)
         if address := self.model.get_binding(relation).network.bind_address:
             return address
