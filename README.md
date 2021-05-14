@@ -31,4 +31,4 @@ To discover the IP Redis is running behind. The output will have lines like:
 
 Then, from your local machine, you can:
 
-    redis-cli -h 10.1.168.69 -p 6379
+    redis-cli -h 10.1.168.69
