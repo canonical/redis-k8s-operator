@@ -6,15 +6,29 @@ redis interface.
 Import `RedisRequires` in your charm by adding the following to `src/charm.py`:
 ```
 from charms.redis_k8s.v0.redis import RedisRequires
-
-# In your charm's `__init__` method.
+```
+And then in your charm's `__init__` method:
+```
+# Make sure you set redis_relation in StoredState. Assuming you refer to this
+# as `self._stored`:
+self._stored.set_default(redis_relation={})
 self.redis = RedisRequires(self, self._stored)
 ```
-And then wherever you need to reference the relation data:
+And then wherever you need to reference the relation data it will be available
+via StoredState:
 ```
+redis_hosts = []
 for redis_unit in self._stored.redis_relation:
-    redis_host = self._stored.redis_relation[redis_unit]["hostname"]
-    redis_port = self._stored.redis_relation[redis_unit]["port"]
+    redis_hosts.append({
+        "redis-host": self._stored.redis_relation[redis_unit]["hostname"],
+        "redis-port": self._stored.redis_relation[redis_unit]["port"],
+    })
+```
+You will also need to add the following to `metadata.yaml`:
+```
+requires:
+  redis:
+    interface: redis
 ```
 """
 import logging
@@ -22,15 +36,15 @@ import logging
 from ops.charm import CharmEvents
 from ops.framework import EventBase, EventSource, Object
 
-# The unique Charmhub library identifier, never change it
+# The unique Charmhub library identifier, never change it.
 LIBID = "fe18a608cec5465fa5153e419abcad7b"
 
-# Increment this major API version when introducing breaking changes
+# Increment this major API version when introducing breaking changes.
 LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
-# to 0 if you are raising the major API version
-LIBPATCH = 1
+# to 0 if you are raising the major API version.
+LIBPATCH = 2
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +74,6 @@ class RedisRequires(Object):
 
         hostname = event.relation.data[event.unit].get("hostname")
         port = event.relation.data[event.unit].get("port")
-        # Store some data from the relation in local state
         self._stored.redis_relation[event.relation.id] = {"hostname": hostname, "port": port}
 
         # Trigger an event that our charm can react to.
@@ -68,7 +81,7 @@ class RedisRequires(Object):
 
     def _on_relation_broken(self, event):
         """Handle the relation broken event."""
-        # Remove the unit data from local state
+        # Remove the unit data from local state.
         self._stored.redis_relation.pop(event.relation.id, None)
 
         # Trigger an event that our charm can react to.
@@ -90,7 +103,7 @@ class RedisProvides(Object):
 
         event.relation.data[self.model.unit]['hostname'] = str(self._bind_address(event))
         event.relation.data[self.model.unit]['port'] = str(self._port)
-        # The reactive Redis charm exposes also 'password'. When tackling
+        # The reactive Redis charm also exposes 'password'. When tackling
         # https://github.com/canonical/redis-operator/issues/7 add 'password'
         # field so that it matches the exposed interface information from it.
         # event.relation.data[self.unit]['password'] = ''
