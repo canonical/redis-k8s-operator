@@ -59,7 +59,7 @@ class TestCharm(TestCase):
         # Without setting back to leader, the below throws a RuntimeError on app.status
         self.harness.set_leader(True)
         self.assertEqual(self.harness.charm.app.status, UnknownStatus())
-        self.assertEqual(self.harness.get_workload_version(), None)
+        self.assertEqual(self.harness.get_workload_version(), "6.0.11")
 
     @mock.patch.object(Redis, "info")
     def test_on_update_status_failure_not_leader(self, info):

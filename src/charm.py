@@ -101,9 +101,9 @@ class RedisK8sCharm(CharmBase):
             info = redis.info("server")
             version = info["redis_version"]
             self.unit.status = ActiveStatus()
+            self.unit.set_workload_version(version)
             if self.unit.is_leader():
                 self.app.status = ActiveStatus()
-                self.unit.set_workload_version(version)
             return True
         except RedisError:
             self.unit.status = WaitingStatus(WAITING_MESSAGE)
