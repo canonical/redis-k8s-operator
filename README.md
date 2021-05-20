@@ -21,12 +21,12 @@ To check it you run:
 
 To discover the IP Redis is running behind. The output will have lines like:
 
-    Unit           Workload    Agent  Address       Ports     Message
-    redis-k8s/20   active      idle   10.1.168.69   6379/TCP  Pod is ready.
+    Unit          Workload  Agent  Address     Ports  Message
+    redis-k8s/0*  active    idle   10.1.31.23
 
 Then, from your local machine, you can:
 
-    redis-cli -h 10.1.168.69
+    redis-cli -h 10.1.31.23 PING
 
 # Docs
 
