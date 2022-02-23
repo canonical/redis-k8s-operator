@@ -62,4 +62,4 @@ class TestClient(unittest.TestCase):
             self.assertFalse(is_ready)
             self.assertEqual(
                 logger.output,
-                ["WARNING:client:[redis-k8s:client] Unable to connect to Redis: "])
+                ["WARNING:client:[redis-k8s-operator:client] Unable to connect to Redis: "])

@@ -19,7 +19,7 @@ import redis
 
 from log_adapter import CustomAdapter
 
-logger = CustomAdapter(logging.getLogger(__name__), {'prefix': 'redis-k8s:client'})
+logger = CustomAdapter(logging.getLogger(__name__), {'prefix': 'redis-k8s-operator:client'})
 
 
 class RedisClient:

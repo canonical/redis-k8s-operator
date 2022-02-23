@@ -104,7 +104,7 @@ class RedisProvides(Object):
         event.relation.data[self.model.unit]['hostname'] = str(self._bind_address(event))
         event.relation.data[self.model.unit]['port'] = str(self._port)
         # The reactive Redis charm also exposes 'password'. When tackling
-        # https://github.com/canonical/redis-k8s/issues/7 add 'password'
+        # https://github.com/canonical/redis-k8s-operator/issues/7 add 'password'
         # field so that it matches the exposed interface information from it.
         # event.relation.data[self.unit]['password'] = ''
 
