@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-name: redis-k8s-operator
+name: redis-k8s
 display-name: Redis
 docs: https://discourse.charmhub.io/t/redis-docs-index/4571
 description: >
