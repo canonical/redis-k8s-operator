@@ -32,7 +32,7 @@ from pod_spec import PodSpecBuilder
 
 WAITING_FOR_REDIS_MSG = 'Waiting for Redis ...'
 
-logger = CustomAdapter(logging.getLogger(__name__), {'prefix': 'redis-operator:charm'})
+logger = CustomAdapter(logging.getLogger(__name__), {'prefix': 'redis-k8s-operator:charm'})
 
 # We expect the redis container to use the default port
 DEFAULT_PORT = 6379

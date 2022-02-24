@@ -22,7 +22,7 @@ It connects to a controller. The controller is hosted on a cloud and controls mo
 Then you build and deploy this charm into the model you just created:
     
     charmcraft build
-    juju deploy ./redis-k8s.charm --resource redis-image=ubuntu/redis
+    juju deploy ./redis-k8s-operator.charm --resource redis-image=ubuntu/redis
 
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:
@@ -31,8 +31,8 @@ To check it you run:
 
 to discover the IP Redis is running behind. The output will have lines like:
 
-    Unit          Workload    Agent  Address       Ports     Message
-    redis-k8/20   active      idle   10.1.168.69   6379/TCP  Pod is ready.
+    Unit                    Workload    Agent  Address       Ports     Message
+    redis-k8-operator/20    active      idle   10.1.168.69   6379/TCP  Pod is ready.
 
 Then, from your local machine, you can:
 
@@ -65,13 +65,13 @@ a virtualenv with the development requirements:
 
 In order to check the result of a modification, rebuild and upgrade the charm:
 
-    # Consider now that you are inside redis-operator directory.
+    # Consider now that you are inside redis-k8s-operator directory.
     charmcraft build
-    juju upgrade-charm --path="./redis-k8s.charm" redis-k8s --force-units
+    juju upgrade-charm --path="./redis-k8s-operator.charm" redis-k8s-operator --force-units
 
 Or you can clean up things on different levels, application, model, and controller:
 
-    juju remove-application redis-k8s --force --no-wait
+    juju remove-application redis-k8s-operator --force --no-wait
     juju destroy-model redis-model --destroy-storage --force --no-wait
     juju destroy-controller micro --destroy-all-models
 
@@ -91,7 +91,7 @@ To show the logs for all the units in the model:
 
 To see the logs for a specific pod:
     
-    microk8s.kubectl --namespace=redis-model logs redis-k8s-0
+    microk8s.kubectl --namespace=redis-model logs redis-k8s-operator-0
 
 ## Testing
 
