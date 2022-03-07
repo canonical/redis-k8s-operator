@@ -2,8 +2,5 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-charmhelpers~=0.20.20
-git+https://github.com/juju-solutions/resource-oci-image#egg=oci-image
-ops~=1.1.0
-PyYAML~=5.4.1
+ops~=1.2.0
 redis~=3.5.3

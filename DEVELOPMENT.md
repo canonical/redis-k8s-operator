@@ -64,7 +64,7 @@ a tox virtual environment with the development requirements:
 
 In order to check the result of a modification, rebuild and upgrade the charm:
 
-    # Consider now that you are inside redis-operator directory.
+    # Consider now that you are inside redis-k8s directory.
     charmcraft build
     juju upgrade-charm --path="./redis-k8s.charm" redis-k8s --force-units
 
