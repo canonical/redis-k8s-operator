@@ -11,15 +11,7 @@
 # PURPOSE.  See the GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import logging
-
-
-class CustomAdapter(logging.LoggerAdapter):
-    """
-    This adapter prefix the log messages by a given 'prefix' key.
-    """
-
-    def process(self, msg, kwargs):
-        return '[%s] %s' % (self.extra['prefix'], msg), kwargs
+check-service:
+  description: Check if the redis service is up

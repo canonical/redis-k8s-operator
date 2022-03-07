@@ -14,146 +14,103 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-import functools
 import logging
 
-import yaml
+from redis import Redis
+from redis.exceptions import RedisError
 
 from charms.redis_k8s.v0.redis import RedisProvides
-from oci_image import OCIImageResource, OCIImageResourceError
 from ops.charm import CharmBase
-from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
+from ops.model import ActiveStatus, WaitingStatus
+from ops.pebble import ConnectionError
 
-from client import RedisClient
-from log_adapter import CustomAdapter
-from pod_spec import PodSpecBuilder
+REDIS_PORT = 6379
+WAITING_MESSAGE = 'Waiting for Redis...'
 
-WAITING_FOR_REDIS_MSG = 'Waiting for Redis ...'
-
-logger = CustomAdapter(logging.getLogger(__name__), {'prefix': 'redis-operator:charm'})
-
-# We expect the redis container to use the default port
-DEFAULT_PORT = 6379
+logger = logging.getLogger(__name__)
 
 
-def log_event_handler(method):
-    @functools.wraps(method)
-    def decorated(self, event):
-        logger.debug("Running {}".format(method.__name__))
-        try:
-            return method(self, event)
-        finally:
-            logger.debug("Completed {}".format(method.__name__))
-
-    return decorated
-
-
-class RedisCharm(CharmBase):
-    state = StoredState()
-
+class RedisK8sCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
-        logger.debug('Initializing charm')
 
-        self.redis = RedisClient(host=self.model.app.name, port=DEFAULT_PORT)
-        self.redis_provides = RedisProvides(self, port=DEFAULT_PORT)
-        self.image = OCIImageResource(self, "redis-image")
+        self.redis_provides = RedisProvides(self, port=REDIS_PORT)
 
-        self.framework.observe(self.on.start, self.on_start)
-        self.framework.observe(self.on.stop, self.on_stop)
-        self.framework.observe(self.on.config_changed, self.configure_pod)
-        self.framework.observe(self.on.upgrade_charm, self.configure_pod)
+        self.framework.observe(self.on.config_changed, self.config_changed)
+        self.framework.observe(self.on.upgrade_charm, self.config_changed)
         self.framework.observe(self.on.update_status, self.update_status)
 
-    @log_event_handler
-    def on_start(self, event):
-        """Initialize Redis.
+        self.framework.observe(self.on.check_service_action, self.check_service)
 
-        This event handler is deferred if initialization of Redis fails.
-        """
-        if not self.unit.is_leader():
-            self.unit.status = ActiveStatus()
-            return
+    def config_changed(self, event):
+        logger.info("Beginning config_changed")
+        layer_config = {
+            "summary": "Redis layer",
+            "description": "Redis layer",
+            "services": {
+                "redis": {
+                    "override": "replace",
+                    "summary": "Redis service",
+                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "startup": "enabled",
+                    "environment": {
+                        "ALLOW_EMPTY_PASSWORD": "yes"
+                    }
+                }
+            }
+        }
 
-        if not self.redis.is_ready():
-            self.unit.status = WaitingStatus(WAITING_FOR_REDIS_MSG)
-            logger.debug("{}: deferring on_start".format(WAITING_FOR_REDIS_MSG))
-            event.defer()
-            return
-
-        self.set_ready_status()
-
-    @log_event_handler
-    def on_stop(self, _):
-        """Mark terminating unit as inactive.
-        """
-        self.redis.close()
-        self.unit.status = MaintenanceStatus('Pod is terminating.')
-
-    @log_event_handler
-    def configure_pod(self, event):
-        """Applies the pod configuration.
-        """
-        if not self.unit.is_leader():
-            logger.debug("Spec changes ignored by non-leader")
-            self.unit.status = ActiveStatus()
-            return
-
-        self.unit.status = WaitingStatus("Fetching image information ...")
         try:
-            image_info = self.image.fetch()
-        except OCIImageResourceError:
-            self.unit.status = BlockedStatus(
-                "Error fetching image information.")
-            return
+            container = self.unit.get_container("redis")
+            services = container.get_plan().to_dict().get("services", {})
 
-        # Build Pod spec
-        builder = PodSpecBuilder(
-            name=self.model.app.name,
-            port=DEFAULT_PORT,
-            image_info=image_info,
-        )
+            if services != layer_config["services"]:
+                logger.debug("About to add_layer with layer_config:\n{}".format(layer_config))
+                container.add_layer("redis", layer_config, combine=True)
 
-        spec = builder.build_pod_spec()
-        logger.debug("Pod spec: \n{}".format(yaml.dump(spec)))
-
-        # Applying pod spec. If the spec hasn't changed, this has no effect.
-        logger.debug("Applying pod spec.")
-        self.model.pod.set_spec(spec)
-
-        if not self.redis.is_ready():
-            self.unit.status = WaitingStatus(WAITING_FOR_REDIS_MSG)
-            logger.debug("{}: deferring configure_pod".format(WAITING_FOR_REDIS_MSG))
+                service = container.get_service("redis")
+                if service.is_running():
+                    logger.debug("Stopping service")
+                    container.stop("redis")
+                logger.debug("Starting service")
+                container.start("redis")
+        except ConnectionError:
+            logger.info("Pebble is not ready, deferring event")
             event.defer()
             return
 
-        self.set_ready_status()
+        self._redis_check()
 
-    @log_event_handler
-    def update_status(self, _):
-        """Set status for all units.
+    def update_status(self, event):
+        logger.info("Beginning update_status")
+        self._redis_check()
 
-        Status may be
-        - Redis API server not reachable (service is not ready),
-        - Ready
-        """
-        if not self.unit.is_leader():
+    def check_service(self, event):
+        logger.info("Beginning check_service")
+        results = {}
+        if self._redis_check():
+            results["result"] = "Service is running"
+        else:
+            results["result"] = "Service is not running"
+        event.set_results(results)
+
+    def _redis_check(self):
+        try:
+            redis = Redis()
+            info = redis.info("server")
+            version = info["redis_version"]
             self.unit.status = ActiveStatus()
-            return
-
-        if not self.redis.is_ready():
-            self.unit.status = WaitingStatus(WAITING_FOR_REDIS_MSG)
-            return
-
-        self.set_ready_status()
-
-    def set_ready_status(self):
-        logger.debug('Pod is ready.')
-        self.unit.status = ActiveStatus()
-        self.app.status = ActiveStatus()
+            self.unit.set_workload_version(version)
+            if self.unit.is_leader():
+                self.app.status = ActiveStatus()
+            return True
+        except RedisError:
+            self.unit.status = WaitingStatus(WAITING_MESSAGE)
+            if self.unit.is_leader():
+                self.app.status = WaitingStatus(WAITING_MESSAGE)
+            return False
 
 
-if __name__ == "__main__":
-    main(RedisCharm)
+if __name__ == "__main__":  # pragma: nocover
+    main(RedisK8sCharm)
