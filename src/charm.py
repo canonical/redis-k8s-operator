@@ -93,7 +93,10 @@ class RedisK8sCharm(CharmBase):
         self._redis_check()
 
     def update_status(self, event):
-        """Handle update_status event."""
+        """Handle update_status event.
+
+        On update status, check the container.
+        """
         logger.info("Beginning update_status")
         self._redis_check()
 
