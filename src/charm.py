@@ -33,7 +33,11 @@ logger = logging.getLogger(__name__)
 
 
 class RedisK8sCharm(CharmBase):
-    """Charm the service."""
+    """Charm the service.
+
+    Deploy a standalone instance of redis-server, using Pebble as an entry
+    point to the service.
+    """
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -47,7 +51,11 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.check_service_action, self.check_service)
 
     def config_changed(self, event):
-        """Handle config_changed event."""
+        """Handle config_changed event.
+
+        Creates the Pebble layer and updates the container if needed. Finally,
+        checks the status of the redis service.
+        """
         logger.info("Beginning config_changed")
         layer_config = {
             "summary": "Redis layer",
@@ -90,7 +98,11 @@ class RedisK8sCharm(CharmBase):
         self._redis_check()
 
     def check_service(self, event):
-        """Handle for check_service action."""
+        """Handle for check_service action.
+
+        Checks if redis-server is active and running, setting the unit
+        status with the result.
+        """
         logger.info("Beginning check_service")
         results = {}
         if self._redis_check():
