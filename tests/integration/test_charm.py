@@ -9,8 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 from pytest_operator.plugin import OpsTest
-from client import RedisClient
-from charm import DEFAULT_PORT
+from redis import Redis
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +25,18 @@ async def test_build_and_deploy(ops_test: OpsTest):
     """
     # build and deploy charm from local source folder
     charm = await ops_test.build_charm(".")
-    resources = {"redis-image": METADATA["resources"]["redis-image"]["upstream-source"]}
+    resources = {"redis-image": METADATA["resources"]["redis-image"]["upstream"]}
     await ops_test.model.deploy(charm, resources=resources, application_name=APP_NAME)
 
     # issuing dummy update_status just to trigger an event
     await ops_test.model.set_config({"update-status-hook-interval": "10s"})
 
-    await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", timeout=1000)
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status="active",
+        raise_on_blocked=True,
+        timeout=1000,
+    )
     assert ops_test.model.applications[APP_NAME].units[0].workload_status == "active"
 
     # effectively disable the update status from firing
@@ -42,8 +46,7 @@ async def test_build_and_deploy(ops_test: OpsTest):
 @pytest.mark.abort_on_fail
 async def test_application_is_up(ops_test: OpsTest):
     status = await ops_test.model.get_status()  # noqa: F821
-    redis_host = status["applications"][APP_NAME]["units"][f"{APP_NAME}/0"]["address"]
+    address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/0"]["address"]
+    cli = Redis(address)
 
-    redis = RedisClient(host=redis_host, port=DEFAULT_PORT)
-    assert redis.is_ready()
-    redis.close()
+    assert cli.ping()

@@ -4,15 +4,20 @@
 
 from unittest import TestCase, mock
 
+from charms.redis_k8s.v0.redis import RedisProvides
+from ops.model import (
+    ActiveStatus,
+    Container,
+    MaintenanceStatus,
+    UnknownStatus,
+    WaitingStatus,
+)
+from ops.pebble import ConnectionError, ServiceInfo
+from ops.testing import Harness
 from redis import Redis
 from redis.exceptions import RedisError
 
-from ops.model import ActiveStatus, Container, MaintenanceStatus, UnknownStatus, WaitingStatus
-from ops.pebble import ServiceInfo, ConnectionError
-from ops.testing import Harness
-
 from charm import RedisK8sCharm
-from charms.redis_k8s.v0.redis import RedisProvides
 
 
 class TestCharm(TestCase):
@@ -74,11 +79,9 @@ class TestCharm(TestCase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {
-                        "ALLOW_EMPTY_PASSWORD": "yes"
-                    }
+                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
                 }
-            }
+            },
         }
         self.assertEqual(found_plan, expected_plan)
         container = self.harness.model.unit.get_container("redis")
@@ -101,11 +104,9 @@ class TestCharm(TestCase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {
-                        "ALLOW_EMPTY_PASSWORD": "yes"
-                    }
+                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
                 }
-            }
+            },
         }
         self.assertEqual(found_plan, expected_plan)
         container = self.harness.model.unit.get_container("redis")
@@ -138,11 +139,7 @@ class TestCharm(TestCase):
     def test_config_changed_when_unit_is_leader_and_service_is_running(self, info):
         self.harness.set_leader(True)
         info.return_value = {"redis_version": "6.0.11"}
-        mock_info = {
-            "name": "redis",
-            "startup": "enabled",
-            "current": "active"
-        }
+        mock_info = {"name": "redis", "startup": "enabled", "current": "active"}
         mock_service = ServiceInfo.from_dict(mock_info)
         mock_container = mock.MagicMock(Container)
         mock_container.get_service.return_value = mock_service
@@ -168,9 +165,7 @@ class TestCharm(TestCase):
         self.harness.add_relation_unit(rel_id, "wordpress/0")
         # When
         self.harness.update_relation_data(rel_id, "wordpress/0", {})
-        rel_data = self.harness.get_relation_data(
-            rel_id, self.harness.charm.unit.name
-        )
+        rel_data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         # Then
         self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
         self.assertEqual(rel_data.get("port"), "6379")
