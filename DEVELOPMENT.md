@@ -21,8 +21,8 @@ It connects to a controller. The controller is hosted on a cloud and controls mo
 
 Then you build and deploy this charm into the model you just created:
     
-    charmcraft build
-    juju deploy ./redis-k8s.charm --resource redis-image=ubuntu/redis
+    charmcraft pack
+    juju deploy ./redis-k8s_ubuntu-20.04-amd64.charm --resource redis-image=ubuntu/redis
 
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:
@@ -32,7 +32,7 @@ To check it you run:
 to discover the IP Redis is running behind. The output will have lines like:
 
     Unit          Workload    Agent  Address       Ports     Message
-    redis-k8/20   active      idle   10.1.168.69   6379/TCP  Pod is ready.
+    redis-k8s/20  active      idle   10.1.168.69   6379/TCP
 
 Then, from your local machine, you can:
 
@@ -59,14 +59,15 @@ port `6379`.
 The charm is based on the [operator framework](https://github.com/canonical/operator/). Create and activate 
 a tox virtual environment with the development requirements:
 
-    tox --notest -e unit
-    source .tox/unit/bin/activate
+    virtualenv -p python3 venv
+    source venv/bin/activate
+    pip install -r requirements.txt
 
 In order to check the result of a modification, rebuild and upgrade the charm:
 
     # Consider now that you are inside redis-k8s directory.
-    charmcraft build
-    juju upgrade-charm --path="./redis-k8s.charm" redis-k8s --force-units
+    charmcraft pack
+    juju upgrade-charm --path="./redis-k8s_ubuntu-20.04-amd64.charm" redis-k8s --force-units
 
 Or you can clean up things on different levels, application, model, and controller:
 
@@ -94,10 +95,16 @@ To see the logs for a specific pod:
 
 ## Testing
 
-```shell
-tox -e fmt           # update your code according to linting rules
-tox -e lint          # code style
-tox -e unit          # unit tests
-tox -e integration   # integration tests
-tox                  # runs 'lint' and 'unit' environments
-```
+The Python operator framework includes a very nice harness for testing
+operator behaviour without full deployment.
+
+    tox -e fmt           # update your code according to linting rules
+    tox -e lint          # code style
+    tox -e unit          # unit tests
+    tox -e integration   # integration tests
+    tox                  # runs 'lint' and 'unit' environments
+
+
+## Canonical Contributor Agreement
+
+Canonical welcomes contributions to the Charmed Redis Operator. Please check out our [contributor agreement](https://ubuntu.com/legal/contributors) if you're interested in contributing to the solution.

@@ -3,24 +3,31 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import logging
+"""Charm code for Redis service."""
 
-from redis import Redis
-from redis.exceptions import RedisError
+import logging
 
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, WaitingStatus
 from ops.pebble import ConnectionError
+from redis import Redis
+from redis.exceptions import RedisError
 
 REDIS_PORT = 6379
-WAITING_MESSAGE = 'Waiting for Redis...'
+WAITING_MESSAGE = "Waiting for Redis..."
 
 logger = logging.getLogger(__name__)
 
 
 class RedisK8sCharm(CharmBase):
+    """Charm the service.
+
+    Deploy a standalone instance of redis-server, using Pebble as an entry
+    point to the service.
+    """
+
     def __init__(self, *args):
         super().__init__(*args)
 
@@ -33,6 +40,11 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.check_service_action, self.check_service)
 
     def config_changed(self, event):
+        """Handle config_changed event.
+
+        Creates the Pebble layer and updates the container if needed. Finally,
+        checks the status of the redis service.
+        """
         logger.info("Beginning config_changed")
         layer_config = {
             "summary": "Redis layer",
@@ -43,11 +55,9 @@ class RedisK8sCharm(CharmBase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {
-                        "ALLOW_EMPTY_PASSWORD": "yes"
-                    }
+                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
                 }
-            }
+            },
         }
 
         try:
@@ -72,10 +82,19 @@ class RedisK8sCharm(CharmBase):
         self._redis_check()
 
     def update_status(self, event):
+        """Handle update_status event.
+
+        On update status, check the container.
+        """
         logger.info("Beginning update_status")
         self._redis_check()
 
     def check_service(self, event):
+        """Handle for check_service action.
+
+        Checks if redis-server is active and running, setting the unit
+        status with the result.
+        """
         logger.info("Beginning check_service")
         results = {}
         if self._redis_check():
