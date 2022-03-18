@@ -17,17 +17,19 @@
 """Charm code for Redis service."""
 
 import logging
+from typing import Optional
 
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, WaitingStatus
-from ops.pebble import ConnectionError
+from ops.model import ActiveStatus, WaitingStatus, Relation
+from ops.pebble import Layer
 from redis import Redis
 from redis.exceptions import RedisError
 
 REDIS_PORT = 6379
 WAITING_MESSAGE = "Waiting for Redis..."
+PEER = "redis-peers"
 
 logger = logging.getLogger(__name__)
 
@@ -42,57 +44,33 @@ class RedisK8sCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
 
+        self._container = self.unit.get_container("redis")
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
 
-        self.framework.observe(self.on.config_changed, self.config_changed)
-        self.framework.observe(self.on.upgrade_charm, self.config_changed)
-        self.framework.observe(self.on.update_status, self.update_status)
+        self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
+        self.framework.observe(self.on.config_changed, self._config_changed)
+        self.framework.observe(self.on.upgrade_charm, self._config_changed)
+        self.framework.observe(self.on.update_status, self._update_status)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
 
-    def config_changed(self, event):
+    def _redis_pebble_ready(self, _) -> None:
+        """Handle the pebble_ready event.
+
+        Updates the Pebble layer if needed.
+        """
+        self._update_layer()
+
+    def _config_changed(self, event) -> None:
         """Handle config_changed event.
 
-        Creates the Pebble layer and updates the container if needed. Finally,
-        checks the status of the redis service.
+        Updates the Pebble layer if needed. Finally, checks the redis service
+        updating the unit status with the result.
         """
-        logger.info("Beginning config_changed")
-        layer_config = {
-            "summary": "Redis layer",
-            "description": "Redis layer",
-            "services": {
-                "redis": {
-                    "override": "replace",
-                    "summary": "Redis service",
-                    "command": "/usr/local/bin/start-redis.sh redis-server",
-                    "startup": "enabled",
-                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
-                }
-            },
-        }
-
-        try:
-            container = self.unit.get_container("redis")
-            services = container.get_plan().to_dict().get("services", {})
-
-            if services != layer_config["services"]:
-                logger.debug("About to add_layer with layer_config:\n{}".format(layer_config))
-                container.add_layer("redis", layer_config, combine=True)
-
-                service = container.get_service("redis")
-                if service.is_running():
-                    logger.debug("Stopping service")
-                    container.stop("redis")
-                logger.debug("Starting service")
-                container.start("redis")
-        except ConnectionError:
-            logger.info("Pebble is not ready, deferring event")
-            event.defer()
-            return
-
+        self._update_layer()
         self._redis_check()
 
-    def update_status(self, event):
+    def _update_status(self, event):
         """Handle update_status event.
 
         On update status, check the container.
@@ -114,7 +92,53 @@ class RedisK8sCharm(CharmBase):
             results["result"] = "Service is not running"
         event.set_results(results)
 
+    def _update_layer(self) -> None:
+        """Update the Pebble layer.
+
+        Checks the current container Pebble layer. If the layer is different
+        to the new one, Pebble is updated. If not, nothing needs to be done.
+        """
+        if not self._container.can_connect():
+            self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
+
+        # Get current config
+        current_layer = self._container.get_plan()
+        # Create the new config layer
+        new_layer = self._redis_layer()
+
+        # Update the Pebble configuration Layer
+        if current_layer.services != new_layer.services:
+            logger.debug("About to add_layer with layer_config:\n{}".format(new_layer))
+            self._container.add_layer("redis", new_layer, combine=True)
+            logger.info("Added updated layer 'redis' to Pebble plan")
+            self._container.restart("redis")
+            logger.info("Restarted redis service")
+
+        self.unit.status = ActiveStatus()
+
+    def _redis_layer(self) -> Layer:
+        """Create the Pebble configuration layer for Redis.
+        
+        Returns:
+            A `ops.pebble.Layer` object with the current layer options
+        """
+        layer_config = {
+            "summary": "Redis layer",
+            "description": "Redis layer",
+            "services": {
+                "redis": {
+                    "override": "replace",
+                    "summary": "Redis service",
+                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "startup": "enabled",
+                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
+                }
+            },
+        }
+        return Layer(layer_config)
+
     def _redis_check(self):
+        """Checks is the Redis database is active."""
         try:
             redis = Redis()
             info = redis.info("server")
@@ -129,6 +153,14 @@ class RedisK8sCharm(CharmBase):
             if self.unit.is_leader():
                 self.app.status = WaitingStatus(WAITING_MESSAGE)
             return False
+    
+    @property
+    def _peers(self) -> Optional[Relation]:
+        """Fetch the peer relation.
+
+        Returns:
+            An `ops.model.Relation` object representing the peer relation.
+        """
 
 
 if __name__ == "__main__":  # pragma: nocover
