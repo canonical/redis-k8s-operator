@@ -161,6 +161,7 @@ class RedisK8sCharm(CharmBase):
         Returns:
             An `ops.model.Relation` object representing the peer relation.
         """
+        return self.model.get_relation(PEER)
 
 
 if __name__ == "__main__":  # pragma: nocover
