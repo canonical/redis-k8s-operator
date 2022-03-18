@@ -16,14 +16,8 @@
 from unittest import TestCase, mock
 
 from charms.redis_k8s.v0.redis import RedisProvides
-from ops.model import (
-    ActiveStatus,
-    Container,
-    MaintenanceStatus,
-    UnknownStatus,
-    WaitingStatus,
-)
-from ops.pebble import ConnectionError, ServiceInfo
+from ops.model import ActiveStatus, Container, UnknownStatus, WaitingStatus
+from ops.pebble import ServiceInfo
 from ops.testing import Harness
 from redis import Redis
 from redis.exceptions import RedisError
@@ -140,9 +134,10 @@ class TestCharm(TestCase):
         self.harness.update_config()
         mock_container.add_layer.assert_not_called()
         mock_container.restart.assert_not_called()
-        self.assertEqual(self.harness.charm.unit.status, WaitingStatus(
-            "Waiting for Pebble in workload container"
-            ))
+        self.assertEqual(
+            self.harness.charm.unit.status,
+            WaitingStatus("Waiting for Pebble in workload container"),
+        )
         self.assertEqual(self.harness.charm.app.status, UnknownStatus())
         self.assertEqual(self.harness.get_workload_version(), None)
         # TODO - test for the event being deferred

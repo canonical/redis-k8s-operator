@@ -22,8 +22,8 @@ from typing import Optional
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, WaitingStatus, Relation
-from ops.pebble import Layer, ConnectionError
+from ops.model import ActiveStatus, Relation, WaitingStatus
+from ops.pebble import Layer
 from redis import Redis
 from redis.exceptions import RedisError
 
@@ -90,7 +90,7 @@ class RedisK8sCharm(CharmBase):
         to the new one, Pebble is updated. If not, nothing needs to be done.
         """
         container = self.unit.get_container("redis")
-        
+
         if not container.can_connect():
             self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
             return
@@ -113,7 +113,7 @@ class RedisK8sCharm(CharmBase):
 
     def _redis_layer(self) -> Layer:
         """Create the Pebble configuration layer for Redis.
-        
+
         Returns:
             A `ops.pebble.Layer` object with the current layer options
         """
