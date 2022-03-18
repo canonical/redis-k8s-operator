@@ -131,7 +131,7 @@ class TestCharm(TestCase):
     def test_config_changed_pebble_error(self, info):
         self.harness.set_leader(True)
         mock_container = mock.MagicMock(Container)
-        mock_container.get_plan.side_effect = ConnectionError("Error connecting to pebble")
+        mock_container.can_connect.return_value = False
 
         def mock_get_container(name):
             return mock_container
@@ -139,9 +139,10 @@ class TestCharm(TestCase):
         self.harness.model.unit.get_container = mock_get_container
         self.harness.update_config()
         mock_container.add_layer.assert_not_called()
-        mock_container.stop.assert_not_called()
-        mock_container.start.assert_not_called()
-        self.assertEqual(self.harness.charm.unit.status, MaintenanceStatus(""))
+        mock_container.restart.assert_not_called()
+        self.assertEqual(self.harness.charm.unit.status, WaitingStatus(
+            "Waiting for Pebble in workload container"
+            ))
         self.assertEqual(self.harness.charm.app.status, UnknownStatus())
         self.assertEqual(self.harness.get_workload_version(), None)
         # TODO - test for the event being deferred
@@ -160,8 +161,7 @@ class TestCharm(TestCase):
 
         self.harness.model.unit.get_container = mock_get_container
         self.harness.update_config()
-        mock_container.stop.assert_called_once_with("redis")
-        mock_container.start.assert_called_once_with("redis")
+        mock_container.restart.assert_called_once_with("redis")
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")

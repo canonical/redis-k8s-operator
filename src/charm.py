@@ -23,7 +23,7 @@ from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, WaitingStatus, Relation
-from ops.pebble import Layer
+from ops.pebble import Layer, ConnectionError
 from redis import Redis
 from redis.exceptions import RedisError
 
@@ -44,7 +44,6 @@ class RedisK8sCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
 
-        self._container = self.unit.get_container("redis")
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
 
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
@@ -68,6 +67,12 @@ class RedisK8sCharm(CharmBase):
         updating the unit status with the result.
         """
         self._update_layer()
+
+        # update_layer will set a Waiting status if Pebble is not ready
+        if self.unit.status != ActiveStatus():
+            event.defer()
+            return
+
         self._redis_check()
 
     def _update_status(self, event):
@@ -78,40 +83,30 @@ class RedisK8sCharm(CharmBase):
         logger.info("Beginning update_status")
         self._redis_check()
 
-    def check_service(self, event):
-        """Handle for check_service action.
-
-        Checks if redis-server is active and running, setting the unit
-        status with the result.
-        """
-        logger.info("Beginning check_service")
-        results = {}
-        if self._redis_check():
-            results["result"] = "Service is running"
-        else:
-            results["result"] = "Service is not running"
-        event.set_results(results)
-
     def _update_layer(self) -> None:
         """Update the Pebble layer.
 
         Checks the current container Pebble layer. If the layer is different
         to the new one, Pebble is updated. If not, nothing needs to be done.
         """
-        if not self._container.can_connect():
+        container = self.unit.get_container("redis")
+        
+        if not container.can_connect():
             self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
+            return
 
         # Get current config
-        current_layer = self._container.get_plan()
+        current_layer = container.get_plan()
+
         # Create the new config layer
         new_layer = self._redis_layer()
 
         # Update the Pebble configuration Layer
         if current_layer.services != new_layer.services:
             logger.debug("About to add_layer with layer_config:\n{}".format(new_layer))
-            self._container.add_layer("redis", new_layer, combine=True)
+            container.add_layer("redis", new_layer, combine=True)
             logger.info("Added updated layer 'redis' to Pebble plan")
-            self._container.restart("redis")
+            container.restart("redis")
             logger.info("Restarted redis service")
 
         self.unit.status = ActiveStatus()
@@ -153,7 +148,21 @@ class RedisK8sCharm(CharmBase):
             if self.unit.is_leader():
                 self.app.status = WaitingStatus(WAITING_MESSAGE)
             return False
-    
+
+    def check_service(self, event):
+        """Handle for check_service action.
+
+        Checks if redis-server is active and running, setting the unit
+        status with the result.
+        """
+        logger.info("Beginning check_service")
+        results = {}
+        if self._redis_check():
+            results["result"] = "Service is running"
+        else:
+            results["result"] = "Service is not running"
+        event.set_results(results)
+
     @property
     def _peers(self) -> Optional[Relation]:
         """Fetch the peer relation.
