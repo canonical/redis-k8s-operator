@@ -15,12 +15,14 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """Charm code for Redis service."""
-
 import logging
+import secrets
+import string
 from typing import Optional
 
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import CharmBase
+from ops.framework import EventBase
 from ops.main import main
 from ops.model import ActiveStatus, Relation, WaitingStatus
 from ops.pebble import Layer
@@ -29,6 +31,7 @@ from redis.exceptions import RedisError
 
 REDIS_PORT = 6379
 WAITING_MESSAGE = "Waiting for Redis..."
+CONFIG_PATH = "/etc/redis/"
 PEER = "redis-peers"
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,7 @@ class RedisK8sCharm(CharmBase):
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
 
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
+        self.framework.observe(self.on.leader_elected, self._leader_elected)
         self.framework.observe(self.on.config_changed, self._config_changed)
         self.framework.observe(self.on.upgrade_charm, self._config_changed)
         self.framework.observe(self.on.update_status, self._update_status)
@@ -60,7 +64,22 @@ class RedisK8sCharm(CharmBase):
         """
         self._update_layer()
 
-    def _config_changed(self, event) -> None:
+    def _leader_elected(self, _) -> None:
+        """Handle the leader_elected event.
+
+        If no password exists, a new one will be created for accessing Redis. This password
+        will be stored on the peer relation databag.
+        """
+        peer_data = self._peers.data[self.app]
+        redis_password = peer_data.get("redis-password", None)
+
+        if redis_password is None:
+            self._peers.data[self.app]["redis-password"] = self._generate_password()
+
+            # TODO: remove this once the action to retrieve the password is implemented
+            logger.info("REDIS PASSWORD: {}".format(peer_data.get("redis-password", None)))
+
+    def _config_changed(self, event: EventBase) -> None:
         """Handle config_changed event.
 
         Updates the Pebble layer if needed. Finally, checks the redis service
@@ -75,7 +94,7 @@ class RedisK8sCharm(CharmBase):
 
         self._redis_check()
 
-    def _update_status(self, event):
+    def _update_status(self, _) -> None:
         """Handle update_status event.
 
         On update status, check the container.
@@ -126,16 +145,16 @@ class RedisK8sCharm(CharmBase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
+                    "environment": {"REDIS_PASSWORD": self._get_password()},
                 }
             },
         }
         return Layer(layer_config)
 
-    def _redis_check(self):
+    def _redis_check(self) -> None:
         """Checks is the Redis database is active."""
         try:
-            redis = Redis()
+            redis = Redis(password=self._get_password())
             info = redis.info("server")
             version = info["redis_version"]
             self.unit.status = ActiveStatus()
@@ -171,6 +190,25 @@ class RedisK8sCharm(CharmBase):
             An `ops.model.Relation` object representing the peer relation.
         """
         return self.model.get_relation(PEER)
+
+    def _generate_password(self) -> str:
+        """Generate a random 16 character password string.
+
+        Returns:
+           A random password string.
+        """
+        choices = string.ascii_letters + string.digits
+        password = "".join([secrets.choice(choices) for i in range(16)])
+        return password
+
+    def _get_password(self) -> str:
+        """Get the current admin password for Redis.
+
+        Returns:
+            String with the password
+        """
+        data = self._peers.data[self.app]
+        return data.get("redis-password", "")
 
 
 if __name__ == "__main__":  # pragma: nocover
