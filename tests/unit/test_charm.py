@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Any
 from unittest import TestCase, mock
 
 from charms.redis_k8s.v0.redis import RedisProvides
@@ -167,13 +166,15 @@ class TestCharm(TestCase):
 
     def test_password_on_leader_elected(self):
         # Assert that there is no password in the peer relation.
-        self.assertIsNone(self.harness.charm._peers.data[self.harness.charm.app].get(
-            "redis-password", None)
+        self.assertIsNone(
+            self.harness.charm._peers.data[self.harness.charm.app].get("redis-password", None)
         )
 
         # Check that a new password was generated on leader election.
         self.harness.set_leader()
-        admin_password = self.harness.charm._peers.data[self.harness.charm.app].get("redis-password", None)
+        admin_password = self.harness.charm._peers.data[self.harness.charm.app].get(
+            "redis-password", None
+        )
         self.assertIsNotNone(admin_password)
 
         # Trigger a new leader election and check that the password is still the same.
