@@ -72,14 +72,17 @@ class RedisK8sCharm(CharmBase):
         If no password exists, a new one will be created for accessing Redis. This password
         will be stored on the peer relation databag.
         """
-        peer_data = self._peers.data[self.app]
-        redis_password = peer_data.get(PEER_PASSWORD_KEY, None)
+        redis_password = self._get_password()
 
-        if redis_password is None:
+        if not redis_password:
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
             # TODO: remove this once the action to retrieve the password is implemented
-            logger.info("REDIS PASSWORD: {}".format(peer_data.get(PEER_PASSWORD_KEY, None)))
+            logger.info(
+                "REDIS PASSWORD: {}".format(
+                    self._peers.data[self.app].get(PEER_PASSWORD_KEY, None)
+                )
+            )
 
     def _config_changed(self, event: EventBase) -> None:
         """Handle config_changed event.

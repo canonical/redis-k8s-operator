@@ -166,22 +166,18 @@ class TestCharm(TestCase):
 
     def test_password_on_leader_elected(self):
         # Assert that there is no password in the peer relation.
-        self.assertIsNone(
-            self.harness.charm._peers.data[self.harness.charm.app].get("redis-password", None)
-        )
+        self.assertFalse(self.harness.charm._get_password())
 
         # Check that a new password was generated on leader election.
         self.harness.set_leader()
-        admin_password = self.harness.charm._peers.data[self.harness.charm.app].get(
-            "redis-password", None
-        )
-        self.assertIsNotNone(admin_password)
+        admin_password = self.harness.charm._get_password()
+        self.assertTrue(admin_password)
 
         # Trigger a new leader election and check that the password is still the same.
         self.harness.set_leader(False)
         self.harness.set_leader()
         self.assertEqual(
-            self.harness.charm._peers.data[self.harness.charm.app].get("redis-password", None),
+            self.harness.charm._get_password(),
             admin_password,
         )
 
