@@ -33,6 +33,8 @@ REDIS_PORT = 6379
 WAITING_MESSAGE = "Waiting for Redis..."
 CONFIG_PATH = "/etc/redis/"
 PEER = "redis-peers"
+PEER_PASSWORD_KEY = "redis-password"
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +73,13 @@ class RedisK8sCharm(CharmBase):
         will be stored on the peer relation databag.
         """
         peer_data = self._peers.data[self.app]
-        redis_password = peer_data.get("redis-password", None)
+        redis_password = peer_data.get(PEER_PASSWORD_KEY, None)
 
         if redis_password is None:
-            self._peers.data[self.app]["redis-password"] = self._generate_password()
+            self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
             # TODO: remove this once the action to retrieve the password is implemented
-            logger.info("REDIS PASSWORD: {}".format(peer_data.get("redis-password", None)))
+            logger.info("REDIS PASSWORD: {}".format(peer_data.get(PEER_PASSWORD_KEY, None)))
 
     def _config_changed(self, event: EventBase) -> None:
         """Handle config_changed event.
@@ -208,7 +210,7 @@ class RedisK8sCharm(CharmBase):
             String with the password
         """
         data = self._peers.data[self.app]
-        return data.get("redis-password", "")
+        return data.get(PEER_PASSWORD_KEY, "")
 
 
 if __name__ == "__main__":  # pragma: nocover
