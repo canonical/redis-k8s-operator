@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+from typing import Any
 from unittest import TestCase, mock
 
 from charms.redis_k8s.v0.redis import RedisProvides
@@ -27,9 +28,12 @@ from charm import RedisK8sCharm
 
 class TestCharm(TestCase):
     def setUp(self):
+        self._peer_relation = "redis-peers"
+
         self.harness = Harness(RedisK8sCharm)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
+        self.harness.add_relation(self._peer_relation, self.harness.charm.app.name)
 
     @mock.patch.object(Redis, "info")
     def test_on_update_status_success_leader(self, info):
@@ -84,7 +88,7 @@ class TestCharm(TestCase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
+                    "environment": {"REDIS_PASSWORD": self.harness.charm._get_password()},
                 }
             },
         }
@@ -109,7 +113,7 @@ class TestCharm(TestCase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
+                    "environment": {"REDIS_PASSWORD": self.harness.charm._get_password()},
                 }
             },
         }
@@ -160,6 +164,25 @@ class TestCharm(TestCase):
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
+
+    def test_password_on_leader_elected(self):
+        # Assert that there is no password in the peer relation.
+        self.assertIsNone(self.harness.charm._peers.data[self.harness.charm.app].get(
+            "redis-password", None)
+        )
+
+        # Check that a new password was generated on leader election.
+        self.harness.set_leader()
+        admin_password = self.harness.charm._peers.data[self.harness.charm.app].get("redis-password", None)
+        self.assertIsNotNone(admin_password)
+
+        # Trigger a new leader election and check that the password is still the same.
+        self.harness.set_leader(False)
+        self.harness.set_leader()
+        self.assertEqual(
+            self.harness.charm._peers.data[self.harness.charm.app].get("redis-password", None),
+            admin_password,
+        )
 
     @mock.patch.object(RedisProvides, "_bind_address")
     def test_on_relation_changed_status_when_unit_is_leader(self, bind_address):
