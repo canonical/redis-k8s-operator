@@ -42,3 +42,7 @@ resources:
     type: oci-image
     description: ubuntu lts docker image for redis
     upstream: ubuntu/redis
+
+peers:
+  redis-peers:
+    interface: redis-peers
