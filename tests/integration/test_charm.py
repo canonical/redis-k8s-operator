@@ -10,6 +10,7 @@ import pytest
 import yaml
 from pytest_operator.plugin import OpsTest
 from redis import Redis
+from redis.exceptions import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,71 @@ async def test_build_and_deploy(ops_test: OpsTest):
 
 @pytest.mark.abort_on_fail
 async def test_application_is_up(ops_test: OpsTest):
+    """After application deployment, test the database connection.
+
+    Use the action to retrieve the password to connect to the database.
+    """
     status = await ops_test.model.get_status()  # noqa: F821
     address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/0"]["address"]
-    cli = Redis(address)
 
+    # Use action to get admin password
+    logger.info("calling action to retrieve password")
+    action = await ops_test.model.units.get(f"{APP_NAME}/0").run_action(
+        "get-initial-admin-password"
+    )
+    password = (await action.wait()).results["redis-password"]
+
+    cli = Redis(address, password=password)
+
+    assert cli.ping()
+
+
+@pytest.mark.abort_on_fail
+async def test_database_with_no_password(ops_test: OpsTest):
+    """Check that the database cannot be accessed without a password."""
+    status = await ops_test.model.get_status()  # noqa: F821
+    address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/0"]["address"]
+
+    cli = Redis(address)
+    try:
+        cli.ping()
+        assert False, "Client can connect without password"
+    except AuthenticationError:
+        assert True
+
+
+@pytest.mark.abort_on_fail
+async def test_same_password_after_scaling(ops_test: OpsTest):
+    """Check that the password remains the same.
+
+    Scale down to 0 and back to 1. Then check that the action returns the same password
+    and that it works on the database.
+    """
+    # Use action to get admin password
+    logger.info("calling action to retrieve password")
+    action = await ops_test.model.units.get(f"{APP_NAME}/0").run_action(
+        "get-initial-admin-password"
+    )
+    before_pw = (await action.wait()).results["redis-password"]
+
+    logger.info("scaling charm %s to 0 units", APP_NAME)
+    await ops_test.model.applications[APP_NAME].scale(scale=0)
+    await ops_test.model.block_until(lambda: len(ops_test.model.applications[APP_NAME].units) == 0)
+
+    logger.info("scaling charm %s to 1 units", APP_NAME)
+    await ops_test.model.applications[APP_NAME].scale(scale=1)
+    await ops_test.model.block_until(lambda: len(ops_test.model.applications[APP_NAME].units) > 0)
+
+    # Use action to get admin password after scaling
+    logger.info("calling action to retrieve password")
+    action = await ops_test.model.units.get(f"{APP_NAME}/0").run_action(
+        "get-initial-admin-password"
+    )
+    after_pw = (await action.wait()).results["redis-password"]
+
+    assert before_pw == after_pw
+
+    status = await ops_test.model.get_status()  # noqa: F821
+    address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/0"]["address"]
+    cli = Redis(address, password=after_pw)
     assert cli.ping()
