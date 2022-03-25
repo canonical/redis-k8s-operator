@@ -15,19 +15,26 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """Charm code for Redis service."""
-
 import logging
+import secrets
+import string
+from typing import Optional
 
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import CharmBase
+from ops.framework import EventBase
 from ops.main import main
-from ops.model import ActiveStatus, WaitingStatus
-from ops.pebble import ConnectionError
+from ops.model import ActiveStatus, Relation, WaitingStatus
+from ops.pebble import Layer
 from redis import Redis
 from redis.exceptions import RedisError
 
 REDIS_PORT = 6379
 WAITING_MESSAGE = "Waiting for Redis..."
+CONFIG_PATH = "/etc/redis/"
+PEER = "redis-peers"
+PEER_PASSWORD_KEY = "redis-password"
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,19 +51,96 @@ class RedisK8sCharm(CharmBase):
 
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
 
-        self.framework.observe(self.on.config_changed, self.config_changed)
-        self.framework.observe(self.on.upgrade_charm, self.config_changed)
-        self.framework.observe(self.on.update_status, self.update_status)
+        self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
+        self.framework.observe(self.on.leader_elected, self._leader_elected)
+        self.framework.observe(self.on.config_changed, self._config_changed)
+        self.framework.observe(self.on.upgrade_charm, self._config_changed)
+        self.framework.observe(self.on.update_status, self._update_status)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
 
-    def config_changed(self, event):
+    def _redis_pebble_ready(self, _) -> None:
+        """Handle the pebble_ready event.
+
+        Updates the Pebble layer if needed.
+        """
+        self._update_layer()
+
+    def _leader_elected(self, _) -> None:
+        """Handle the leader_elected event.
+
+        If no password exists, a new one will be created for accessing Redis. This password
+        will be stored on the peer relation databag.
+        """
+        redis_password = self._get_password()
+
+        if not redis_password:
+            self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
+
+            # TODO: remove this once the action to retrieve the password is implemented
+            logger.info(
+                "REDIS PASSWORD: {}".format(
+                    self._peers.data[self.app].get(PEER_PASSWORD_KEY, None)
+                )
+            )
+
+    def _config_changed(self, event: EventBase) -> None:
         """Handle config_changed event.
 
-        Creates the Pebble layer and updates the container if needed. Finally,
-        checks the status of the redis service.
+        Updates the Pebble layer if needed. Finally, checks the redis service
+        updating the unit status with the result.
         """
-        logger.info("Beginning config_changed")
+        self._update_layer()
+
+        # update_layer will set a Waiting status if Pebble is not ready
+        if self.unit.status != ActiveStatus():
+            event.defer()
+            return
+
+        self._redis_check()
+
+    def _update_status(self, _) -> None:
+        """Handle update_status event.
+
+        On update status, check the container.
+        """
+        logger.info("Beginning update_status")
+        self._redis_check()
+
+    def _update_layer(self) -> None:
+        """Update the Pebble layer.
+
+        Checks the current container Pebble layer. If the layer is different
+        to the new one, Pebble is updated. If not, nothing needs to be done.
+        """
+        container = self.unit.get_container("redis")
+
+        if not container.can_connect():
+            self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
+            return
+
+        # Get current config
+        current_layer = container.get_plan()
+
+        # Create the new config layer
+        new_layer = self._redis_layer()
+
+        # Update the Pebble configuration Layer
+        if current_layer.services != new_layer.services:
+            logger.debug("About to add_layer with layer_config:\n{}".format(new_layer))
+            container.add_layer("redis", new_layer, combine=True)
+            logger.info("Added updated layer 'redis' to Pebble plan")
+            container.restart("redis")
+            logger.info("Restarted redis service")
+
+        self.unit.status = ActiveStatus()
+
+    def _redis_layer(self) -> Layer:
+        """Create the Pebble configuration layer for Redis.
+
+        Returns:
+            A `ops.pebble.Layer` object with the current layer options
+        """
         layer_config = {
             "summary": "Redis layer",
             "description": "Redis layer",
@@ -66,39 +150,28 @@ class RedisK8sCharm(CharmBase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
+                    "environment": {"REDIS_PASSWORD": self._get_password()},
                 }
             },
         }
+        return Layer(layer_config)
 
+    def _redis_check(self) -> None:
+        """Checks is the Redis database is active."""
         try:
-            container = self.unit.get_container("redis")
-            services = container.get_plan().to_dict().get("services", {})
-
-            if services != layer_config["services"]:
-                logger.debug("About to add_layer with layer_config:\n{}".format(layer_config))
-                container.add_layer("redis", layer_config, combine=True)
-
-                service = container.get_service("redis")
-                if service.is_running():
-                    logger.debug("Stopping service")
-                    container.stop("redis")
-                logger.debug("Starting service")
-                container.start("redis")
-        except ConnectionError:
-            logger.info("Pebble is not ready, deferring event")
-            event.defer()
-            return
-
-        self._redis_check()
-
-    def update_status(self, event):
-        """Handle update_status event.
-
-        On update status, check the container.
-        """
-        logger.info("Beginning update_status")
-        self._redis_check()
+            redis = Redis(password=self._get_password())
+            info = redis.info("server")
+            version = info["redis_version"]
+            self.unit.status = ActiveStatus()
+            self.unit.set_workload_version(version)
+            if self.unit.is_leader():
+                self.app.status = ActiveStatus()
+            return True
+        except RedisError:
+            self.unit.status = WaitingStatus(WAITING_MESSAGE)
+            if self.unit.is_leader():
+                self.app.status = WaitingStatus(WAITING_MESSAGE)
+            return False
 
     def check_service(self, event):
         """Handle for check_service action.
@@ -114,21 +187,33 @@ class RedisK8sCharm(CharmBase):
             results["result"] = "Service is not running"
         event.set_results(results)
 
-    def _redis_check(self):
-        try:
-            redis = Redis()
-            info = redis.info("server")
-            version = info["redis_version"]
-            self.unit.status = ActiveStatus()
-            self.unit.set_workload_version(version)
-            if self.unit.is_leader():
-                self.app.status = ActiveStatus()
-            return True
-        except RedisError:
-            self.unit.status = WaitingStatus(WAITING_MESSAGE)
-            if self.unit.is_leader():
-                self.app.status = WaitingStatus(WAITING_MESSAGE)
-            return False
+    @property
+    def _peers(self) -> Optional[Relation]:
+        """Fetch the peer relation.
+
+        Returns:
+            An `ops.model.Relation` object representing the peer relation.
+        """
+        return self.model.get_relation(PEER)
+
+    def _generate_password(self) -> str:
+        """Generate a random 16 character password string.
+
+        Returns:
+           A random password string.
+        """
+        choices = string.ascii_letters + string.digits
+        password = "".join([secrets.choice(choices) for i in range(16)])
+        return password
+
+    def _get_password(self) -> str:
+        """Get the current admin password for Redis.
+
+        Returns:
+            String with the password
+        """
+        data = self._peers.data[self.app]
+        return data.get(PEER_PASSWORD_KEY, "")
 
 
 if __name__ == "__main__":  # pragma: nocover

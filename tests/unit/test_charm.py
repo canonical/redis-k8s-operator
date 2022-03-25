@@ -16,14 +16,8 @@
 from unittest import TestCase, mock
 
 from charms.redis_k8s.v0.redis import RedisProvides
-from ops.model import (
-    ActiveStatus,
-    Container,
-    MaintenanceStatus,
-    UnknownStatus,
-    WaitingStatus,
-)
-from ops.pebble import ConnectionError, ServiceInfo
+from ops.model import ActiveStatus, Container, UnknownStatus, WaitingStatus
+from ops.pebble import ServiceInfo
 from ops.testing import Harness
 from redis import Redis
 from redis.exceptions import RedisError
@@ -33,9 +27,12 @@ from charm import RedisK8sCharm
 
 class TestCharm(TestCase):
     def setUp(self):
+        self._peer_relation = "redis-peers"
+
         self.harness = Harness(RedisK8sCharm)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
+        self.harness.add_relation(self._peer_relation, self.harness.charm.app.name)
 
     @mock.patch.object(Redis, "info")
     def test_on_update_status_success_leader(self, info):
@@ -90,7 +87,7 @@ class TestCharm(TestCase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
+                    "environment": {"REDIS_PASSWORD": self.harness.charm._get_password()},
                 }
             },
         }
@@ -115,7 +112,7 @@ class TestCharm(TestCase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"ALLOW_EMPTY_PASSWORD": "yes"},
+                    "environment": {"REDIS_PASSWORD": self.harness.charm._get_password()},
                 }
             },
         }
@@ -131,7 +128,7 @@ class TestCharm(TestCase):
     def test_config_changed_pebble_error(self, info):
         self.harness.set_leader(True)
         mock_container = mock.MagicMock(Container)
-        mock_container.get_plan.side_effect = ConnectionError("Error connecting to pebble")
+        mock_container.can_connect.return_value = False
 
         def mock_get_container(name):
             return mock_container
@@ -139,9 +136,11 @@ class TestCharm(TestCase):
         self.harness.model.unit.get_container = mock_get_container
         self.harness.update_config()
         mock_container.add_layer.assert_not_called()
-        mock_container.stop.assert_not_called()
-        mock_container.start.assert_not_called()
-        self.assertEqual(self.harness.charm.unit.status, MaintenanceStatus(""))
+        mock_container.restart.assert_not_called()
+        self.assertEqual(
+            self.harness.charm.unit.status,
+            WaitingStatus("Waiting for Pebble in workload container"),
+        )
         self.assertEqual(self.harness.charm.app.status, UnknownStatus())
         self.assertEqual(self.harness.get_workload_version(), None)
         # TODO - test for the event being deferred
@@ -160,11 +159,27 @@ class TestCharm(TestCase):
 
         self.harness.model.unit.get_container = mock_get_container
         self.harness.update_config()
-        mock_container.stop.assert_called_once_with("redis")
-        mock_container.start.assert_called_once_with("redis")
+        mock_container.restart.assert_called_once_with("redis")
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
+
+    def test_password_on_leader_elected(self):
+        # Assert that there is no password in the peer relation.
+        self.assertFalse(self.harness.charm._get_password())
+
+        # Check that a new password was generated on leader election.
+        self.harness.set_leader()
+        admin_password = self.harness.charm._get_password()
+        self.assertTrue(admin_password)
+
+        # Trigger a new leader election and check that the password is still the same.
+        self.harness.set_leader(False)
+        self.harness.set_leader()
+        self.assertEqual(
+            self.harness.charm._get_password(),
+            admin_password,
+        )
 
     @mock.patch.object(RedisProvides, "_bind_address")
     def test_on_relation_changed_status_when_unit_is_leader(self, bind_address):
