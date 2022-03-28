@@ -55,10 +55,7 @@ async def test_application_is_up(ops_test: OpsTest):
 
     # Use action to get admin password
     logger.info("calling action to retrieve password")
-    action = await ops_test.model.units.get(f"{APP_NAME}/0").run_action(
-        "get-initial-admin-password"
-    )
-    password = (await action.wait()).results["redis-password"]
+    password = await get_password(ops_test)
 
     cli = Redis(address, password=password)
 
@@ -72,11 +69,9 @@ async def test_database_with_no_password(ops_test: OpsTest):
     address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/0"]["address"]
 
     cli = Redis(address)
-    try:
+    # The ping should raise AuthenticationError
+    with pytest.raises(AuthenticationError):
         cli.ping()
-        assert False, "Client can connect without password"
-    except AuthenticationError:
-        assert True
 
 
 @pytest.mark.abort_on_fail
@@ -88,10 +83,7 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
     """
     # Use action to get admin password
     logger.info("calling action to retrieve password")
-    action = await ops_test.model.units.get(f"{APP_NAME}/0").run_action(
-        "get-initial-admin-password"
-    )
-    before_pw = (await action.wait()).results["redis-password"]
+    before_pw = await get_password(ops_test)
 
     logger.info("scaling charm %s to 0 units", APP_NAME)
     await ops_test.model.applications[APP_NAME].scale(scale=0)
@@ -101,12 +93,17 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
     await ops_test.model.applications[APP_NAME].scale(scale=1)
     await ops_test.model.block_until(lambda: len(ops_test.model.applications[APP_NAME].units) > 0)
 
+    # Wait for model to settle
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status="active",
+        raise_on_blocked=True,
+        timeout=1000,
+    )
+
     # Use action to get admin password after scaling
     logger.info("calling action to retrieve password")
-    action = await ops_test.model.units.get(f"{APP_NAME}/0").run_action(
-        "get-initial-admin-password"
-    )
-    after_pw = (await action.wait()).results["redis-password"]
+    after_pw = await get_password(ops_test)
 
     assert before_pw == after_pw
 
@@ -114,3 +111,21 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
     address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/0"]["address"]
     cli = Redis(address, password=after_pw)
     assert cli.ping()
+
+
+##################
+# Helper methods #
+##################
+
+
+async def get_password(ops_test: OpsTest) -> str:
+    """Use the charm action to retrieve the password.
+
+    Return:
+        String with the password stored on the peer relation databag.
+    """
+    action = await ops_test.model.units.get(f"{APP_NAME}/0").run_action(
+        "get-initial-admin-password"
+    )
+    password = await action.wait()
+    return password.results["redis-password"]
