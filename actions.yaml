@@ -15,3 +15,6 @@
 
 check-service:
   description: Check if the redis service is up
+
+get-initial-admin-password:
+  description: Returns the randomly generated password at charm deployment
