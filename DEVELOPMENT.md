@@ -32,11 +32,15 @@ To check it you run:
 to discover the IP Redis is running behind. The output will have lines like:
 
     Unit          Workload    Agent  Address       Ports     Message
-    redis-k8s/20  active      idle   10.1.168.69   6379/TCP
+    redis-k8s/0*  active      idle   10.1.168.69
+
+To retrieve the password to access the database, use the `get-initial-admin-password` action:
+
+    juju run-action redis-k8s/0 get-initial-admin-password --wait
 
 Then, from your local machine, you can:
 
-    redis-cli -h 10.1.168.69 -p 6379
+    redis-cli -h 10.1.168.69 -p 6379 -a <password>
 
 Another option is to port-forward the Redis pod or service port from k8s to a local port.
 For example, forwarding a node's port
