@@ -24,9 +24,13 @@ To discover the IP Redis is running behind. The output will have lines like:
     Unit          Workload  Agent  Address     Ports  Message
     redis-k8s/0*  active    idle   10.1.31.23
 
+To retrieve the password to access the database, use the `get-initial-admin-password` action:
+
+    juju run-action redis-k8s/0 get-initial-admin-password --wait
+
 Then, from your local machine, you can:
 
-    redis-cli -h 10.1.31.23 PING
+    redis-cli -h 10.1.31.23 -a <password> PING
 
 # Docs
 
