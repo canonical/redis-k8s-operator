@@ -56,6 +56,7 @@ async def test_application_is_up(ops_test: OpsTest):
     # Use action to get admin password
     logger.info("calling action to retrieve password")
     password = await get_password(ops_test)
+    logger.info("retrieved password for %s: %s", APP_NAME, password)
 
     cli = Redis(address, password=password)
 
@@ -105,6 +106,7 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
     logger.info("calling action to retrieve password")
     after_pw = await get_password(ops_test)
 
+    logger.info("before scaling password: %s - after scaling password: %s", before_pw, after_pw)
     assert before_pw == after_pw
 
     status = await ops_test.model.get_status()  # noqa: F821
