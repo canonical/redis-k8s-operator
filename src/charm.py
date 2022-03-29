@@ -10,7 +10,7 @@ import string
 from typing import Optional
 
 from charms.redis_k8s.v0.redis import RedisProvides
-from ops.charm import CharmBase
+from ops.charm import ActionEvent, CharmBase
 from ops.framework import EventBase
 from ops.main import main
 from ops.model import ActiveStatus, Relation, WaitingStatus
@@ -47,6 +47,9 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._update_status)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
+        self.framework.observe(
+            self.on.get_initial_admin_password_action, self._get_password_action
+        )
 
     def _redis_pebble_ready(self, _) -> None:
         """Handle the pebble_ready event.
@@ -175,6 +178,13 @@ class RedisK8sCharm(CharmBase):
         else:
             results["result"] = "Service is not running"
         event.set_results(results)
+
+    def _get_password_action(self, event: ActionEvent) -> None:
+        """Handle the get_initial_admin_password event.
+
+        Sets the result of the action with the admin password for Redis.
+        """
+        event.set_results({"redis-password": self._get_password()})
 
     @property
     def _peers(self) -> Optional[Relation]:
