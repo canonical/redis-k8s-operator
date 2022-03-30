@@ -18,13 +18,19 @@
 import logging
 import secrets
 import string
-from typing import Optional
+from typing import Optional, List, Union
 
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import ActionEvent, CharmBase
 from ops.framework import EventBase
 from ops.main import main
-from ops.model import ActiveStatus, Relation, WaitingStatus
+from ops.model import (
+    ActiveStatus,
+    Relation,
+    WaitingStatus,
+    BlockedStatus,
+    ModelError
+)
 from ops.pebble import Layer
 from redis import Redis
 from redis.exceptions import RedisError
@@ -86,6 +92,10 @@ class RedisK8sCharm(CharmBase):
                     self._peers.data[self.app].get(PEER_PASSWORD_KEY, None)
                 )
             )
+        if self._retrieve_certificates() is None:
+            logger.error("No certificates found for TLS encryption")
+            self.app.status = BlockedStatus("App doesn't have TLS certificates")
+            return
 
     def _config_changed(self, event: EventBase) -> None:
         """Handle config_changed event.
@@ -153,7 +163,10 @@ class RedisK8sCharm(CharmBase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"REDIS_PASSWORD": self._get_password()},
+                    "environment": {
+                        "REDIS_PASSWORD": self._get_password(),
+                        "REDIS_EXTRA_FLAGS": f"--tls-cert-file {self._retrieve_certificates()[0]} --tls-key-file {self._retrieve_certificates()[1]} --tls-ca-cert-file {self._retrieve_certificates()[2]}"
+                    },
                 }
             },
         }
@@ -224,6 +237,34 @@ class RedisK8sCharm(CharmBase):
         """
         data = self._peers.data[self.app]
         return data.get(PEER_PASSWORD_KEY, "")
+
+    def _retrieve_certificates(self) -> Union[List, None]:
+        """Check that TLS certificates exist and return them
+
+        Returns:
+            List with the paths of the certificates or None
+        """
+        try:
+            resources = ["cert-file", "key-file", "ca-cert-file"]
+            resource_paths = [self.model.resources.fetch(resource) for resource in resources]
+            return resource_paths
+        except ModelError as e:
+            self.unit.status = BlockedStatus(
+                "Something went wrong when claiming resource; "
+                "run `juju debug-log` for more info'"
+            )
+        # might actually be worth it to just reraise this exception and let the charm error out;
+        # depends on whether we can recover from this.
+            logger.error(e)
+            return None
+        except NameError as e:
+            self.unit.status = BlockedStatus(
+                "Resource not found; "
+                "did you forget to declare it in metadata.yaml?"
+            )
+            logger.error(e)
+            return None
+
 
 
 if __name__ == "__main__":  # pragma: nocover
