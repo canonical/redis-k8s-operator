@@ -197,15 +197,15 @@ class RedisK8sCharm(CharmBase):
     def _redis_extra_flags(self) -> str:
         """
         """
-        extra_flags = ("")
+        extra_flags = []
         if self.config["enable-tls"]:
-            extra_flags = (
+            extra_flags += [
                 f"--tls-port {REDIS_PORT}",
                 "--port 0",
                 f"--tls-cert-file {self._storage_path}/redis.crt",
                 f"--tls-key-file {self._storage_path}/redis.key",
                 f"--tls-ca-cert-file {self._storage_path}/ca.crt",
-            )
+            ]
         return " ".join(extra_flags)
     
     def _redis_check(self) -> None:
