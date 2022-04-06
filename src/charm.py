@@ -15,22 +15,17 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """Charm code for Redis service."""
+
 import logging
 import secrets
 import string
-from typing import Optional, List, Union
+from typing import List, Optional
 
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import ActionEvent, CharmBase
 from ops.framework import EventBase
 from ops.main import main
-from ops.model import (
-    ActiveStatus,
-    Relation,
-    WaitingStatus,
-    BlockedStatus,
-    ModelError
-)
+from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
 from ops.pebble import Layer
 from redis import Redis
 from redis.exceptions import RedisError
@@ -60,13 +55,15 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._leader_elected)
         self.framework.observe(self.on.config_changed, self._config_changed)
-        self.framework.observe(self.on.upgrade_charm, self._config_changed)
+        self.framework.observe(self.on.upgrade_charm, self._upgrade_charm)
         self.framework.observe(self.on.update_status, self._update_status)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
         self.framework.observe(
             self.on.get_initial_admin_password_action, self._get_password_action
         )
+
+        self._storage_path = self.meta.storages["database"].location
 
     def _redis_pebble_ready(self, _) -> None:
         """Handle the pebble_ready event.
@@ -75,6 +72,32 @@ class RedisK8sCharm(CharmBase):
         """
         self._update_layer()
 
+    def _upgrade_charm(self, _) -> None:
+        """
+        """
+        if not self._store_certificates():
+            # NOTE: when updating certificates (a rotation for example), which implies
+            # that there are already some files stored on the resources, this will not
+            # trigger, but the certificates will not be valid as a whole.
+            self.unit.status = WaitingStatus("Not all certificates have been provided")
+    
+    def _store_certificates(self) -> bool:
+        """
+        """
+        cert_paths = self._retrieve_certificates()
+
+        if cert_paths is None:
+            return False
+
+        for cert_path in cert_paths:
+            with open(cert_path, "r") as f:
+                contents = f.read()
+                name = f.name.split('/')[-1]
+            with open(f"{self._storage_path}/{name}", "w") as f:
+                f.write(contents)
+
+        return True
+    
     def _leader_elected(self, _) -> None:
         """Handle the leader_elected event.
 
@@ -93,8 +116,7 @@ class RedisK8sCharm(CharmBase):
                 )
             )
         if self._retrieve_certificates() is None:
-            logger.error("No certificates found for TLS encryption")
-            self.app.status = BlockedStatus("App doesn't have TLS certificates")
+            logger.warning("No certificates found for TLS encryption")
             return
 
     def _config_changed(self, event: EventBase) -> None:
@@ -102,7 +124,7 @@ class RedisK8sCharm(CharmBase):
 
         Updates the Pebble layer if needed. Finally, checks the redis service
         updating the unit status with the result.
-        """
+        """        
         self._update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
@@ -165,13 +187,27 @@ class RedisK8sCharm(CharmBase):
                     "startup": "enabled",
                     "environment": {
                         "REDIS_PASSWORD": self._get_password(),
-                        "REDIS_EXTRA_FLAGS": f"--tls-cert-file {self._retrieve_certificates()[0]} --tls-key-file {self._retrieve_certificates()[1]} --tls-ca-cert-file {self._retrieve_certificates()[2]}"
+                        "REDIS_EXTRA_FLAGS": self._redis_extra_flags(),
                     },
                 }
             },
         }
         return Layer(layer_config)
 
+    def _redis_extra_flags(self) -> str:
+        """
+        """
+        extra_flags = ("")
+        if self.config["enable-tls"]:
+            extra_flags = (
+                f"--tls-port {REDIS_PORT}",
+                "--port 0",
+                f"--tls-cert-file {self._storage_path}/redis.crt",
+                f"--tls-key-file {self._storage_path}/redis.key",
+                f"--tls-ca-cert-file {self._storage_path}/ca.crt",
+            )
+        return " ".join(extra_flags)
+    
     def _redis_check(self) -> None:
         """Checks is the Redis database is active."""
         try:
@@ -238,8 +274,8 @@ class RedisK8sCharm(CharmBase):
         data = self._peers.data[self.app]
         return data.get(PEER_PASSWORD_KEY, "")
 
-    def _retrieve_certificates(self) -> Union[List, None]:
-        """Check that TLS certificates exist and return them
+    def _retrieve_certificates(self) -> Optional[List]:
+        """Check that TLS certificates exist and return them.
 
         Returns:
             List with the paths of the certificates or None
@@ -250,22 +286,19 @@ class RedisK8sCharm(CharmBase):
             return resource_paths
         except ModelError as e:
             self.unit.status = BlockedStatus(
-                "Something went wrong when claiming resource; "
-                "run `juju debug-log` for more info'"
+                "Something went wrong when claiming resource; run `juju debug-log` for more info'"
             )
-        # might actually be worth it to just reraise this exception and let the charm error out;
-        # depends on whether we can recover from this.
+            # might actually be worth it to just reraise this exception and let the
+            # charm error out; depends on whether we can recover from this.
             logger.error(e)
             return None
         except NameError as e:
             self.unit.status = BlockedStatus(
-                "Resource not found; "
-                "did you forget to declare it in metadata.yaml?"
+                "Resource not found; did you forget to declare it in metadata.yaml?"
             )
             logger.error(e)
             return None
 
 
-
 if __name__ == "__main__":  # pragma: nocover
-    main(RedisK8sCharm)
+    main(RedisK8sCharm, use_juju_for_storage=True)

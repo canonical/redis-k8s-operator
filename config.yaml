@@ -1,0 +1,11 @@
+# Copyright 2022 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+options:
+  enable-tls:
+    default: false
+    type: boolean
+    description: >
+      Enabling TLS for the standard port of redis-server.
+      This option should be enabled after uploading the
+      corresponding TLS files as resources.
