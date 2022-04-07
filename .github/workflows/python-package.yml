@@ -25,8 +25,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install tox --fix-missing
+        python3 -m pip install tox
     - name: Linting
       run: |
         tox -e lint
