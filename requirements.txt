@@ -16,6 +16,5 @@
 charmhelpers~=0.20.20
 git+https://github.com/juju-solutions/resource-oci-image#egg=oci-image
 ops~=1.1.0
-pytest~=6.2.2
 PyYAML~=5.4.1
 redis~=3.5.3
