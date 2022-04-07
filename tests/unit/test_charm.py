@@ -87,7 +87,10 @@ class TestCharm(TestCase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"REDIS_PASSWORD": self.harness.charm._get_password()},
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_EXTRA_FLAGS": ""
+                    },
                 }
             },
         }
@@ -112,7 +115,10 @@ class TestCharm(TestCase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"REDIS_PASSWORD": self.harness.charm._get_password()},
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_EXTRA_FLAGS": ""                    
+                    },
                 }
             },
         }
