@@ -73,31 +73,17 @@ class RedisK8sCharm(CharmBase):
         self._update_layer()
 
     def _upgrade_charm(self, _) -> None:
-        """
+        """Handle the upgrade_charm event.
+
+        Tries to store the certificates on the redis container, as new `juju attach-resource`
+        will trigger this event.
         """
         if not self._store_certificates():
             # NOTE: when updating certificates (a rotation for example), which implies
             # that there are already some files stored on the resources, this will not
             # trigger, but the certificates will not be valid as a whole.
             self.unit.status = WaitingStatus("Not all certificates have been provided")
-    
-    def _store_certificates(self) -> bool:
-        """
-        """
-        cert_paths = self._retrieve_certificates()
 
-        if cert_paths is None:
-            return False
-
-        for cert_path in cert_paths:
-            with open(cert_path, "r") as f:
-                contents = f.read()
-                name = f.name.split('/')[-1]
-            with open(f"{self._storage_path}/{name}", "w") as f:
-                f.write(contents)
-
-        return True
-    
     def _leader_elected(self, _) -> None:
         """Handle the leader_elected event.
 
@@ -109,14 +95,8 @@ class RedisK8sCharm(CharmBase):
         if not redis_password:
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
-            # TODO: remove this once the action to retrieve the password is implemented
-            logger.info(
-                "REDIS PASSWORD: {}".format(
-                    self._peers.data[self.app].get(PEER_PASSWORD_KEY, None)
-                )
-            )
         if self._retrieve_certificates() is None:
-            logger.warning("No certificates found for TLS encryption")
+            logger.warning("Not enough certificates found for TLS")
             return
 
     def _config_changed(self, event: EventBase) -> None:
@@ -124,7 +104,7 @@ class RedisK8sCharm(CharmBase):
 
         Updates the Pebble layer if needed. Finally, checks the redis service
         updating the unit status with the result.
-        """        
+        """
         self._update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
@@ -195,7 +175,10 @@ class RedisK8sCharm(CharmBase):
         return Layer(layer_config)
 
     def _redis_extra_flags(self) -> str:
-        """
+        """Generate the REDIS_EXTRA_FLAGS environment variable for the container.
+
+        Will check config options to decide the extra commands passed at the
+        redis-server service. Currently only TLS is an option.
         """
         extra_flags = []
         if self.config["enable-tls"]:
@@ -207,7 +190,7 @@ class RedisK8sCharm(CharmBase):
                 f"--tls-ca-cert-file {self._storage_path}/ca.crt",
             ]
         return " ".join(extra_flags)
-    
+
     def _redis_check(self) -> None:
         """Checks is the Redis database is active."""
         try:
@@ -274,6 +257,28 @@ class RedisK8sCharm(CharmBase):
         data = self._peers.data[self.app]
         return data.get(PEER_PASSWORD_KEY, "")
 
+    def _store_certificates(self) -> bool:
+        """Copy the TLS certificates to the redis container.
+
+        Returns:
+            True if the certificates can be copied, false otherwise.
+        """
+        cert_paths = self._retrieve_certificates()
+
+        if cert_paths is None:
+            return False
+
+        # Copy the files from the resources location to the redis container.
+        for cert_path in cert_paths:
+            with open(cert_path, "r") as f:
+                contents = f.read()
+                # Last part of the whole path is the filename
+                name = f.name.split("/")[-1]
+            with open(f"{self._storage_path}/{name}", "w") as f:
+                f.write(contents)
+
+        return True
+
     def _retrieve_certificates(self) -> Optional[List]:
         """Check that TLS certificates exist and return them.
 
@@ -282,6 +287,7 @@ class RedisK8sCharm(CharmBase):
         """
         try:
             resources = ["cert-file", "key-file", "ca-cert-file"]
+            # Fetch the resource path
             resource_paths = [self.model.resources.fetch(resource) for resource in resources]
             return resource_paths
         except ModelError as e:
