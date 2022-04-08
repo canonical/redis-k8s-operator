@@ -48,3 +48,4 @@ async def test_application_is_up(ops_test: OpsTest):
 
     redis = RedisClient(host=redis_host, port=DEFAULT_PORT)
     assert redis.is_ready()
+    redis.close()
