@@ -92,7 +92,7 @@ To see the logs for a specific pod:
     
     microk8s.kubectl --namespace=redis-model logs redis-k8s-0
 
-### Testing
+## Testing
 
 ```shell
 tox -e fmt           # update your code according to linting rules
