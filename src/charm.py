@@ -18,6 +18,7 @@
 
 import logging
 import secrets
+import shutil
 import string
 from typing import List, Optional
 
@@ -270,12 +271,7 @@ class RedisK8sCharm(CharmBase):
 
         # Copy the files from the resources location to the redis container.
         for cert_path in cert_paths:
-            with open(cert_path, "r") as f:
-                contents = f.read()
-                # Last part of the whole path is the filename
-                name = f.name.split("/")[-1]
-            with open(f"{self._storage_path}/{name}", "w") as f:
-                f.write(contents)
+            shutil.copy(cert_path, self._storage_path)
 
         return True
 

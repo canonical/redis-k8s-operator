@@ -89,7 +89,7 @@ class TestCharm(TestCase):
                     "startup": "enabled",
                     "environment": {
                         "REDIS_PASSWORD": self.harness.charm._get_password(),
-                        "REDIS_EXTRA_FLAGS": ""
+                        "REDIS_EXTRA_FLAGS": "",
                     },
                 }
             },
@@ -117,7 +117,7 @@ class TestCharm(TestCase):
                     "startup": "enabled",
                     "environment": {
                         "REDIS_PASSWORD": self.harness.charm._get_password(),
-                        "REDIS_EXTRA_FLAGS": ""                    
+                        "REDIS_EXTRA_FLAGS": "",
                     },
                 }
             },
