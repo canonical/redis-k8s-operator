@@ -32,3 +32,6 @@ jobs:
     - name: Running unit tests
       run: |
         tox -e unit
+    - name: Running integration tests
+      run: |
+        tox -e integration
