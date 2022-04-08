@@ -4,8 +4,6 @@
 
 
 import logging
-import pdb
-import urllib.request
 from pathlib import Path
 
 import pytest

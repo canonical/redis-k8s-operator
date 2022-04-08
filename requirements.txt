@@ -18,4 +18,3 @@ git+https://github.com/juju-solutions/resource-oci-image#egg=oci-image
 ops~=1.1.0
 PyYAML~=5.4.1
 redis~=3.5.3
-jinja2~=2.11
