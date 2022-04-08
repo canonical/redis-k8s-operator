@@ -57,11 +57,10 @@ port `6379`.
 ## Developing
 
 The charm is based on the [operator framework](https://github.com/canonical/operator/). Create and activate 
-a virtualenv with the development requirements:
+a tox virtual environment with the development requirements:
 
-    virtualenv -p python3 venv
-    source venv/bin/activate
-    pip install -r requirements-dev.txt
+    tox --notest -e unit
+    source .tox/unit/bin/activate
 
 In order to check the result of a modification, rebuild and upgrade the charm:
 
@@ -93,10 +92,12 @@ To see the logs for a specific pod:
     
     microk8s.kubectl --namespace=redis-model logs redis-k8s-0
 
-## Testing
+### Testing
 
-The Python operator framework includes a very nice harness for testing
-operator behaviour without full deployment:
-
-    tox -e unit
-    tox -e integration
+```shell
+tox -e fmt           # update your code according to linting rules
+tox -e lint          # code style
+tox -e unit          # unit tests
+tox -e integration   # integration tests
+tox                  # runs 'lint' and 'unit' environments
+```

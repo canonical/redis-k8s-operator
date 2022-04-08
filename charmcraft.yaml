@@ -13,5 +13,5 @@ parts:
   charm:
     build-packages:
       - git
-    charm-binary-python-packages:
-      - markupsafe
+    charm-python-packages:
+      - setuptools == 57.5.0
