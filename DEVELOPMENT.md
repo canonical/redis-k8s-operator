@@ -96,6 +96,7 @@ To see the logs for a specific pod:
 ## Testing
 
 The Python operator framework includes a very nice harness for testing
-operator behaviour without full deployment. Just `run_tests`:
+operator behaviour without full deployment:
 
-    ./run_tests
+    tox -e unit
+    tox -e integration
