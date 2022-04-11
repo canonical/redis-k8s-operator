@@ -15,3 +15,4 @@ parts:
       - git
     charm-python-packages:
       - setuptools == 57.5.0
+
