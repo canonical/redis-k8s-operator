@@ -201,3 +201,8 @@ class TestCharm(TestCase):
         # Then
         self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
         self.assertEqual(rel_data.get("port"), "6379")
+
+    @mock.patch.object()
+    def test_resources_attached(self):
+        """"""
+        pass

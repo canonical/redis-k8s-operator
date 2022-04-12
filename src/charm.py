@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # This file is part of the Redis k8s Charm for Juju.
-# Copyright 2021 Canonical Ltd.
+# Copyright 2022 Canonical Ltd.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3, as
@@ -28,8 +28,9 @@ from ops.framework import EventBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
 from ops.pebble import Layer
-from redis import Redis
 from redis.exceptions import RedisError
+
+from redis_client import redis_client
 
 REDIS_PORT = 6379
 WAITING_MESSAGE = "Waiting for Redis..."
@@ -96,16 +97,18 @@ class RedisK8sCharm(CharmBase):
         if not redis_password:
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
-        if self._retrieve_certificates() is None:
-            logger.warning("Not enough certificates found for TLS")
-            return
-
     def _config_changed(self, event: EventBase) -> None:
         """Handle config_changed event.
 
         Updates the Pebble layer if needed. Finally, checks the redis service
         updating the unit status with the result.
         """
+        # Check that certificates for TLS exist
+        if self.config["enable-tls"] and self._retrieve_certificates() is None:
+            logger.warning("Not enough certificates found for TLS")
+            self.unit.status = BlockedStatus("No certificates found")
+            return
+
         self._update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
@@ -186,6 +189,7 @@ class RedisK8sCharm(CharmBase):
             extra_flags += [
                 f"--tls-port {REDIS_PORT}",
                 "--port 0",
+                "--tls-auth-clients optional",
                 f"--tls-cert-file {self._storage_path}/redis.crt",
                 f"--tls-key-file {self._storage_path}/redis.key",
                 f"--tls-ca-cert-file {self._storage_path}/ca.crt",
@@ -195,7 +199,9 @@ class RedisK8sCharm(CharmBase):
     def _redis_check(self) -> None:
         """Checks is the Redis database is active."""
         try:
-            redis = Redis(password=self._get_password())
+            redis = redis_client(
+                self._get_password(), self.config["enable-tls"], self._storage_path
+            )
             info = redis.info("server")
             version = info["redis_version"]
             self.unit.status = ActiveStatus()
@@ -303,4 +309,4 @@ class RedisK8sCharm(CharmBase):
 
 
 if __name__ == "__main__":  # pragma: nocover
-    main(RedisK8sCharm, use_juju_for_storage=True)
+    main(RedisK8sCharm)
