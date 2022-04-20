@@ -202,7 +202,7 @@ class TestCharm(TestCase):
         rel_id = self.harness.add_relation("redis", "wordpress")
         self.harness.add_relation_unit(rel_id, "wordpress/0")
         # When
-        self.harness.update_relation_data(rel_id, "wordpress/0", {})
+        self.harness._emit_relation_changed(rel_id, "wordpress/0")
         rel_data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         # Then
         self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
