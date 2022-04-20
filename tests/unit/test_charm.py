@@ -16,7 +16,13 @@
 from unittest import TestCase, mock
 
 from charms.redis_k8s.v0.redis import RedisProvides
-from ops.model import ActiveStatus, Container, UnknownStatus, WaitingStatus
+from ops.model import (
+    ActiveStatus,
+    BlockedStatus,
+    Container,
+    UnknownStatus,
+    WaitingStatus,
+)
 from ops.pebble import ServiceInfo
 from ops.testing import Harness
 from redis import Redis
@@ -202,7 +208,79 @@ class TestCharm(TestCase):
         self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
         self.assertEqual(rel_data.get("port"), "6379")
 
-    @mock.patch.object()
-    def test_resources_attached(self):
-        """"""
-        pass
+    def test_blocked_status_on_wrong_resource_name(self):
+        # NOTE is this possible?
+        # self.harness.add_resource("not-declared", "")
+        # self.harness.charm.on.upgrade_charm.emit()
+        wrong_name = self.harness.charm._retrieve_resource("not-declared")
+        self.assertEqual(wrong_name, None)
+        self.assertEqual(
+            self.harness.charm.unit.status,
+            BlockedStatus("Resource not found; did you forget to declare it in metadata.yaml?"),
+        )
+
+    @mock.patch("charm.shutil.copy")
+    def test_attach_resource(self, _shutil_copy):
+        # Check that there are no resources initially
+        self.assertEqual(self.harness.charm._certificates, [None, None, None])
+
+        self.harness.add_resource("cert-file", "")
+        self.harness.add_resource("key-file", "")
+        self.harness.add_resource("ca-cert-file", "")
+
+        # After adding them, check that the property returns paths for the three of them
+        self.assertTrue(None not in self.harness.charm._certificates)
+
+        self.harness.charm.on.upgrade_charm.emit()
+        _shutil_copy.assert_called()
+
+    def test_blocked_on_enable_tls_with_no_certificates(self):
+        self.harness.update_config({"enable-tls": True})
+        self.assertEqual(self.harness.charm.unit.status, BlockedStatus("No certificates found"))
+
+    @mock.patch("charm.shutil.copy")
+    @mock.patch.object(Redis, "info")
+    def test_active_on_enable_tls_with_certificates(self, info, _shutil_copy):
+        self.harness.set_leader(True)
+        info.return_value = {"redis_version": "6.0.11"}
+
+        self.harness.add_resource("cert-file", "")
+        self.harness.add_resource("key-file", "")
+        self.harness.add_resource("ca-cert-file", "")
+
+        self.harness.charm.on.upgrade_charm.emit()
+
+        _shutil_copy.assert_called()
+        self.harness.update_config({"enable-tls": True})
+
+        found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
+        extra_flags = [
+            "--tls-port 6379",
+            "--port 0",
+            "--tls-auth-clients optional",
+            "--tls-cert-file /var/lib/redis/redis.crt",
+            "--tls-key-file /var/lib/redis/redis.key",
+            "--tls-ca-cert-file /var/lib/redis/ca.crt",
+        ]
+        expected_plan = {
+            "services": {
+                "redis": {
+                    "override": "replace",
+                    "summary": "Redis service",
+                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_EXTRA_FLAGS": " ".join(extra_flags),
+                    },
+                }
+            },
+        }
+
+        self.assertEqual(found_plan, expected_plan)
+        container = self.harness.model.unit.get_container("redis")
+        service = container.get_service("redis")
+        self.assertTrue(service.is_running())
+        self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
+        self.assertEqual(self.harness.charm.app.status, ActiveStatus())
+        self.assertEqual(self.harness.get_workload_version(), "6.0.11")

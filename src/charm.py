@@ -80,11 +80,7 @@ class RedisK8sCharm(CharmBase):
         Tries to store the certificates on the redis container, as new `juju attach-resource`
         will trigger this event.
         """
-        if not self._store_certificates():
-            # NOTE: when updating certificates (a rotation for example), which implies
-            # that there are already some files stored on the resources, this will not
-            # trigger, but the certificates will not be valid as a whole.
-            self.unit.status = WaitingStatus("Not all certificates have been provided")
+        self._store_certificates()
 
     def _leader_elected(self, _) -> None:
         """Handle the leader_elected event.
@@ -92,9 +88,7 @@ class RedisK8sCharm(CharmBase):
         If no password exists, a new one will be created for accessing Redis. This password
         will be stored on the peer relation databag.
         """
-        redis_password = self._get_password()
-
-        if not redis_password:
+        if not self._get_password():
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
     def _config_changed(self, event: EventBase) -> None:
@@ -104,7 +98,7 @@ class RedisK8sCharm(CharmBase):
         updating the unit status with the result.
         """
         # Check that certificates for TLS exist
-        if self.config["enable-tls"] and self._retrieve_certificates() is None:
+        if self.config["enable-tls"] and None in self._certificates:
             logger.warning("Not enough certificates found for TLS")
             self.unit.status = BlockedStatus("No certificates found")
             return
@@ -245,6 +239,16 @@ class RedisK8sCharm(CharmBase):
         """
         return self.model.get_relation(PEER)
 
+    @property
+    def _certificates(self) -> List[Optional[str]]:
+        """Paths of the certificate files.
+
+        Returns:
+            A list with the paths of the certificates or None where no path can be found
+        """
+        resources = ["cert-file", "key-file", "ca-cert-file"]
+        return [self._retrieve_resource(res) for res in resources]
+
     def _generate_password(self) -> str:
         """Generate a random 16 character password string.
 
@@ -264,34 +268,24 @@ class RedisK8sCharm(CharmBase):
         data = self._peers.data[self.app]
         return data.get(PEER_PASSWORD_KEY, "")
 
-    def _store_certificates(self) -> bool:
-        """Copy the TLS certificates to the redis container.
-
-        Returns:
-            True if the certificates can be copied, false otherwise.
-        """
-        cert_paths = self._retrieve_certificates()
-
-        if cert_paths is None:
-            return False
+    def _store_certificates(self) -> None:
+        """Copy the TLS certificates to the redis container."""
+        # Get a list of valid paths
+        cert_paths = list(filter(None, self._certificates))
 
         # Copy the files from the resources location to the redis container.
         for cert_path in cert_paths:
             shutil.copy(cert_path, self._storage_path)
 
-        return True
-
-    def _retrieve_certificates(self) -> Optional[List]:
-        """Check that TLS certificates exist and return them.
+    def _retrieve_resource(self, resource: str) -> Optional[str]:
+        """Check that the resource exists and return it.
 
         Returns:
-            List with the paths of the certificates or None
+            string with the path of the resource or None
         """
         try:
-            resources = ["cert-file", "key-file", "ca-cert-file"]
             # Fetch the resource path
-            resource_paths = [self.model.resources.fetch(resource) for resource in resources]
-            return resource_paths
+            return self.model.resources.fetch(resource)
         except ModelError as e:
             self.unit.status = BlockedStatus(
                 "Something went wrong when claiming resource; run `juju debug-log` for more info'"
