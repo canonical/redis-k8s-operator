@@ -37,6 +37,7 @@ summary: >
   units are allowed, replication and clustering are not supported for the moment.
 maintainers:
   - Eduardo Mucelli R. Oliveira <eduardo.mucelli@canonical.com>
+  - Raul Zamora Martinez <raul.zamora@canonical.com>
 
 provides:
   redis:

@@ -97,7 +97,7 @@ class RedisK8sCharm(CharmBase):
         Updates the Pebble layer if needed. Finally, checks the redis service
         updating the unit status with the result.
         """
-        # Check that certificates for TLS exist
+        # Check that certificates exist if TLS is enabled
         if self.config["enable-tls"] and None in self._certificates:
             logger.warning("Not enough certificates found for TLS")
             self.unit.status = BlockedStatus("No certificates found")
@@ -286,18 +286,7 @@ class RedisK8sCharm(CharmBase):
         try:
             # Fetch the resource path
             return self.model.resources.fetch(resource)
-        except ModelError as e:
-            self.unit.status = BlockedStatus(
-                "Something went wrong when claiming resource; run `juju debug-log` for more info'"
-            )
-            # might actually be worth it to just reraise this exception and let the
-            # charm error out; depends on whether we can recover from this.
-            logger.error(e)
-            return None
-        except NameError as e:
-            self.unit.status = BlockedStatus(
-                "Resource not found; did you forget to declare it in metadata.yaml?"
-            )
+        except (ModelError, NameError) as e:
             logger.error(e)
             return None
 
