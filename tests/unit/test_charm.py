@@ -208,17 +208,6 @@ class TestCharm(TestCase):
         self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
         self.assertEqual(rel_data.get("port"), "6379")
 
-    def test_blocked_status_on_wrong_resource_name(self):
-        # NOTE is this possible?
-        # self.harness.add_resource("not-declared", "")
-        # self.harness.charm.on.upgrade_charm.emit()
-        wrong_name = self.harness.charm._retrieve_resource("not-declared")
-        self.assertEqual(wrong_name, None)
-        self.assertEqual(
-            self.harness.charm.unit.status,
-            BlockedStatus("Resource not found; did you forget to declare it in metadata.yaml?"),
-        )
-
     @mock.patch("charm.shutil.copy")
     def test_attach_resource(self, _shutil_copy):
         # Check that there are no resources initially
