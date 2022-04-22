@@ -208,8 +208,8 @@ class TestCharm(TestCase):
         self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
         self.assertEqual(rel_data.get("port"), "6379")
 
-    @mock.patch("charm.shutil.copy")
-    def test_attach_resource(self, _shutil_copy):
+    @mock.patch("charm.RedisK8sCharm._store_certificates")
+    def test_attach_resource(self, _store_certificates):
         # Check that there are no resources initially
         self.assertEqual(self.harness.charm._certificates, [None, None, None])
 
@@ -221,15 +221,17 @@ class TestCharm(TestCase):
         self.assertTrue(None not in self.harness.charm._certificates)
 
         self.harness.charm.on.upgrade_charm.emit()
-        _shutil_copy.assert_called()
+        _store_certificates.assert_called()
 
     def test_blocked_on_enable_tls_with_no_certificates(self):
         self.harness.update_config({"enable-tls": True})
-        self.assertEqual(self.harness.charm.unit.status, BlockedStatus("No certificates found"))
+        self.assertEqual(
+            self.harness.charm.unit.status, BlockedStatus("Not enough certificates found")
+        )
 
-    @mock.patch("charm.shutil.copy")
+    @mock.patch("charm.RedisK8sCharm._store_certificates")
     @mock.patch.object(Redis, "info")
-    def test_active_on_enable_tls_with_certificates(self, info, _shutil_copy):
+    def test_active_on_enable_tls_with_certificates(self, info, _store_certificates):
         self.harness.set_leader(True)
         info.return_value = {"redis_version": "6.0.11"}
 
@@ -239,7 +241,8 @@ class TestCharm(TestCase):
 
         self.harness.charm.on.upgrade_charm.emit()
 
-        _shutil_copy.assert_called()
+        _store_certificates.assert_called()
+
         self.harness.update_config({"enable-tls": True})
 
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()

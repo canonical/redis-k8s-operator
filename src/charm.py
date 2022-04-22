@@ -18,8 +18,8 @@
 
 import logging
 import secrets
-import shutil
 import string
+from pathlib import Path
 from typing import List, Optional
 
 from charms.redis_k8s.v0.redis import RedisProvides
@@ -100,7 +100,7 @@ class RedisK8sCharm(CharmBase):
         # Check that certificates exist if TLS is enabled
         if self.config["enable-tls"] and None in self._certificates:
             logger.warning("Not enough certificates found for TLS")
-            self.unit.status = BlockedStatus("No certificates found")
+            self.unit.status = BlockedStatus("Not enough certificates found")
             return
 
         self._update_layer()
@@ -240,7 +240,7 @@ class RedisK8sCharm(CharmBase):
         return self.model.get_relation(PEER)
 
     @property
-    def _certificates(self) -> List[Optional[str]]:
+    def _certificates(self) -> List[Optional[Path]]:
         """Paths of the certificate files.
 
         Returns:
@@ -272,16 +272,18 @@ class RedisK8sCharm(CharmBase):
         """Copy the TLS certificates to the redis container."""
         # Get a list of valid paths
         cert_paths = list(filter(None, self._certificates))
+        container = self.unit.get_container("redis")
 
         # Copy the files from the resources location to the redis container.
         for cert_path in cert_paths:
-            shutil.copy(cert_path, self._storage_path)
+            with open(cert_path, "r") as f:
+                container.push((f"{self._storage_path}/{cert_path.name}"), f)
 
-    def _retrieve_resource(self, resource: str) -> Optional[str]:
+    def _retrieve_resource(self, resource: str) -> Optional[Path]:
         """Check that the resource exists and return it.
 
         Returns:
-            string with the path of the resource or None
+            Path of the resource or None
         """
         try:
             # Fetch the resource path

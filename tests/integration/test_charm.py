@@ -131,6 +131,10 @@ async def test_blocked_if_no_certificates(ops_test: OpsTest):
     logger.info("trying to check for blocked status")
     assert ops_test.model.applications[APP_NAME].units[0].workload_status == "blocked"
 
+    # Reset application status
+    await change_config(ops_test, "enable-tls", "false")
+    await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", timeout=1000)
+
 
 @pytest.mark.abort_on_fail
 async def test_enable_tls(ops_test: OpsTest):
@@ -139,12 +143,20 @@ async def test_enable_tls(ops_test: OpsTest):
     After adding the resources and enabling TLS, waits until the
     application is on a Active status. Then, ping the database.
     """
-    # Make sure the config is set to false
-    await change_config(ops_test, "enable-tls", "false")
-
     # each resource contains ("rsc_name", "rsc_path")
     for rsc_name, src_path in TLS_RESOURCES.items():
         await attach_resource(ops_test, rsc_name, src_path)
+
+    # FIXME: A wait here is not guaranteed to work. It can succeed before resources
+    # have been added. Additionally, attaching resources can result on transient error
+    # states for the application while is stabilizing again.
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status="active",
+        raise_on_blocked=False,
+        raise_on_error=False,
+        timeout=1000,
+    )
 
     await change_config(ops_test, "enable-tls", "true")
 
@@ -152,8 +164,8 @@ async def test_enable_tls(ops_test: OpsTest):
         apps=[APP_NAME], status="active", raise_on_blocked=False, timeout=1000
     )
 
-    address = await get_address(ops_test)
     password = await get_password(ops_test)
+    address = await get_address(ops_test)
 
     # connect using the ca certificate
     cli = Redis(address, password=password, ssl=True, ssl_ca_certs=TLS_RESOURCES["ca-cert-file"])
@@ -171,6 +183,7 @@ async def get_password(ops_test: OpsTest, num_unit=0) -> str:
     Return:
         String with the password stored on the peer relation databag.
     """
+    logger.info(f"Calling action to get password for unit {num_unit}")
     action = await ops_test.model.units.get(f"{APP_NAME}/{num_unit}").run_action(
         "get-initial-admin-password"
     )
@@ -180,11 +193,6 @@ async def get_password(ops_test: OpsTest, num_unit=0) -> str:
 
 async def attach_resource(ops_test: OpsTest, rsc_name: str, rsc_path: str) -> None:
     """Use the `juju attach-resource` command to add resources."""
-    # NOTE: Is this check needed for a functional test?
-    if rsc_name not in METADATA["resources"]:
-        logger.error(f"Invalid resource name: {rsc_name}")
-        return
-
     logger.info(f"Attaching resource: attach-resource {APP_NAME} {rsc_name}={rsc_path}")
     await ops_test.juju("attach-resource", APP_NAME, f"{rsc_name}={rsc_path}")
 
@@ -197,6 +205,7 @@ async def change_config(ops_test: OpsTest, conf_name: str, conf_value: Any) -> N
 
 async def get_address(ops_test: OpsTest, unit_num=0) -> str:
     """Get the address for a unit."""
+    logger.info(f"Getting the address for unit {unit_num}")
     status = await ops_test.model.get_status()  # noqa: F821
     address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/{unit_num}"]["address"]
     return address
