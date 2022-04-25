@@ -4,7 +4,6 @@
 
 
 import logging
-from typing import Any
 
 import pytest
 from pytest_operator.plugin import OpsTest
@@ -124,7 +123,7 @@ async def test_blocked_if_no_certificates(ops_test: OpsTest):
     Will enable TLS without providing certificates. This should result
     on a Blocked status.
     """
-    await change_config(ops_test, "enable-tls", "true")
+    await change_config(ops_test, {"enable-tls": "true"})
 
     await ops_test.model.wait_for_idle(apps=[APP_NAME], status="blocked", timeout=1000)
 
@@ -132,7 +131,7 @@ async def test_blocked_if_no_certificates(ops_test: OpsTest):
     assert ops_test.model.applications[APP_NAME].units[0].workload_status == "blocked"
 
     # Reset application status
-    await change_config(ops_test, "enable-tls", "false")
+    await change_config(ops_test, {"enable-tls": "false"})
     await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", timeout=1000)
 
 
@@ -153,12 +152,13 @@ async def test_enable_tls(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME],
         status="active",
+        idle_period=30,
         raise_on_blocked=False,
         raise_on_error=False,
         timeout=1000,
     )
 
-    await change_config(ops_test, "enable-tls", "true")
+    await change_config(ops_test, {"enable-tls": "true"})
 
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME], status="active", raise_on_blocked=False, timeout=1000
@@ -197,10 +197,10 @@ async def attach_resource(ops_test: OpsTest, rsc_name: str, rsc_path: str) -> No
     await ops_test.juju("attach-resource", APP_NAME, f"{rsc_name}={rsc_path}")
 
 
-async def change_config(ops_test: OpsTest, conf_name: str, conf_value: Any) -> None:
+async def change_config(ops_test: OpsTest, values: dict) -> None:
     """Use the `juju config` command to modify a config option."""
-    logger.info(f"Changing config option: {conf_name}={conf_value}")
-    await ops_test.juju("config", APP_NAME, f"{conf_name}={conf_value}")
+    logger.info(f"Changing config options: {values}")
+    await ops_test.model.applications[APP_NAME].set_config(values)
 
 
 async def get_address(ops_test: OpsTest, unit_num=0) -> str:
