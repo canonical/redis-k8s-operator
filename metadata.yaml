@@ -37,23 +37,38 @@ summary: >
   units are allowed, replication and clustering are not supported for the moment.
 maintainers:
   - Eduardo Mucelli R. Oliveira <eduardo.mucelli@canonical.com>
+  - Raul Zamora Martinez <raul.zamora@canonical.com>
+
 provides:
   redis:
     interface: redis
-storage:
-  database:
-    type: filesystem
+
 containers:
   redis:
     resource: redis-image
     mounts:
       - storage: database
         location: /var/lib/redis
+
 resources:
   redis-image:
     type: oci-image
     description: ubuntu lts docker image for redis
     upstream: ubuntu/redis
+  cert-file:
+    type: file
+    filename: redis.crt
+  key-file:
+    type: file
+    filename: redis.key
+  ca-cert-file:
+    type: file
+    filename: ca.crt
+
+storage:
+  database:
+    type: filesystem
+    location: /var/lib/redis
 
 peers:
   redis-peers:
