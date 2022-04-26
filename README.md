@@ -32,6 +32,33 @@ Then, from your local machine, you can:
 
     redis-cli -h 10.1.31.23 -a <password> PING
 
+## Enabling TLS encryption
+
+The charm has [Redis TLS support](https://redis.io/docs/manual/security/encryption/). Three resources are needed:
+
+- ca-cert-file: CA certificate
+- cert-file: X.509 certificate
+- key-file: private key
+
+User provided files are accepted. Alternatively, the testing script located on `tests/gen-test-certs.sh` can be used to generate the certificates:
+
+    # The script will create tests/tls/ folders and place the files there.
+    ./gen-tesst-certs.sh
+
+To attach generated files as resources:
+
+    juju attach-resource redis-k8s ca-cert-file=tests/tls/ca.crt
+    juju attach-resource redis-k8s cert-file=tests/tls/redis.crt
+    juju attach-resource redis-k8s key-file=tests/tls/redis.key
+
+After attaching the files, enable TLS with:
+
+    juju config redis-k8s enable-tls=true
+
+Once the application is on an `active|idle` status, you can test connection from your local machine:
+
+    redis-cli -h <host> -a <password> --tls --cacert ./tests/tls/ca.crt PING
+
 # Docs
 
 Docs can be found at https://charmhub.io/redis-k8s/docs?channel=edge
