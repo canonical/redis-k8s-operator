@@ -1,22 +1,36 @@
 #!/usr/bin/env python3
 # This file is part of the Redis k8s Charm for Juju.
 # Copyright 2022 Canonical Ltd.
-# See LICENSE file for licensing details.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3, as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranties of
+# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
+# PURPOSE.  See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 """Charm code for Redis service."""
+
 import logging
 import secrets
 import string
-from typing import Optional
+from pathlib import Path
+from typing import List, Optional
 
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import ActionEvent, CharmBase
 from ops.framework import EventBase
 from ops.main import main
-from ops.model import ActiveStatus, Relation, WaitingStatus
+from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
 from ops.pebble import Layer
-from redis import Redis
 from redis.exceptions import RedisError
+
+from redis_client import redis_client
 
 REDIS_PORT = 6379
 WAITING_MESSAGE = "Waiting for Redis..."
@@ -43,13 +57,15 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._leader_elected)
         self.framework.observe(self.on.config_changed, self._config_changed)
-        self.framework.observe(self.on.upgrade_charm, self._config_changed)
+        self.framework.observe(self.on.upgrade_charm, self._upgrade_charm)
         self.framework.observe(self.on.update_status, self._update_status)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
         self.framework.observe(
             self.on.get_initial_admin_password_action, self._get_password_action
         )
+
+        self._storage_path = self.meta.storages["database"].location
 
     def _redis_pebble_ready(self, _) -> None:
         """Handle the pebble_ready event.
@@ -58,23 +74,22 @@ class RedisK8sCharm(CharmBase):
         """
         self._update_layer()
 
+    def _upgrade_charm(self, _) -> None:
+        """Handle the upgrade_charm event.
+
+        Tries to store the certificates on the redis container, as new `juju attach-resource`
+        will trigger this event.
+        """
+        self._store_certificates()
+
     def _leader_elected(self, _) -> None:
         """Handle the leader_elected event.
 
         If no password exists, a new one will be created for accessing Redis. This password
         will be stored on the peer relation databag.
         """
-        redis_password = self._get_password()
-
-        if not redis_password:
+        if not self._get_password():
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
-
-            # TODO: remove this once the action to retrieve the password is implemented
-            logger.info(
-                "REDIS PASSWORD: {}".format(
-                    self._peers.data[self.app].get(PEER_PASSWORD_KEY, None)
-                )
-            )
 
     def _config_changed(self, event: EventBase) -> None:
         """Handle config_changed event.
@@ -82,6 +97,12 @@ class RedisK8sCharm(CharmBase):
         Updates the Pebble layer if needed. Finally, checks the redis service
         updating the unit status with the result.
         """
+        # Check that certificates exist if TLS is enabled
+        if self.config["enable-tls"] and None in self._certificates:
+            logger.warning("Not enough certificates found for TLS")
+            self.unit.status = BlockedStatus("Not enough certificates found")
+            return
+
         self._update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
@@ -142,16 +163,39 @@ class RedisK8sCharm(CharmBase):
                     "summary": "Redis service",
                     "command": "/usr/local/bin/start-redis.sh redis-server",
                     "startup": "enabled",
-                    "environment": {"REDIS_PASSWORD": self._get_password()},
+                    "environment": {
+                        "REDIS_PASSWORD": self._get_password(),
+                        "REDIS_EXTRA_FLAGS": self._redis_extra_flags(),
+                    },
                 }
             },
         }
         return Layer(layer_config)
 
+    def _redis_extra_flags(self) -> str:
+        """Generate the REDIS_EXTRA_FLAGS environment variable for the container.
+
+        Will check config options to decide the extra commands passed at the
+        redis-server service. Currently only TLS is an option.
+        """
+        extra_flags = []
+        if self.config["enable-tls"]:
+            extra_flags += [
+                f"--tls-port {REDIS_PORT}",
+                "--port 0",
+                "--tls-auth-clients optional",
+                f"--tls-cert-file {self._storage_path}/redis.crt",
+                f"--tls-key-file {self._storage_path}/redis.key",
+                f"--tls-ca-cert-file {self._storage_path}/ca.crt",
+            ]
+        return " ".join(extra_flags)
+
     def _redis_check(self) -> None:
         """Checks is the Redis database is active."""
         try:
-            redis = Redis(password=self._get_password())
+            redis = redis_client(
+                self._get_password(), self.config["enable-tls"], self._storage_path
+            )
             info = redis.info("server")
             version = info["redis_version"]
             self.unit.status = ActiveStatus()
@@ -195,6 +239,16 @@ class RedisK8sCharm(CharmBase):
         """
         return self.model.get_relation(PEER)
 
+    @property
+    def _certificates(self) -> List[Optional[Path]]:
+        """Paths of the certificate files.
+
+        Returns:
+            A list with the paths of the certificates or None where no path can be found
+        """
+        resources = ["cert-file", "key-file", "ca-cert-file"]
+        return [self._retrieve_resource(res) for res in resources]
+
     def _generate_password(self) -> str:
         """Generate a random 16 character password string.
 
@@ -213,6 +267,30 @@ class RedisK8sCharm(CharmBase):
         """
         data = self._peers.data[self.app]
         return data.get(PEER_PASSWORD_KEY, "")
+
+    def _store_certificates(self) -> None:
+        """Copy the TLS certificates to the redis container."""
+        # Get a list of valid paths
+        cert_paths = list(filter(None, self._certificates))
+        container = self.unit.get_container("redis")
+
+        # Copy the files from the resources location to the redis container.
+        for cert_path in cert_paths:
+            with open(cert_path, "r") as f:
+                container.push((f"{self._storage_path}/{cert_path.name}"), f)
+
+    def _retrieve_resource(self, resource: str) -> Optional[Path]:
+        """Check that the resource exists and return it.
+
+        Returns:
+            Path of the resource or None
+        """
+        try:
+            # Fetch the resource path
+            return self.model.resources.fetch(resource)
+        except (ModelError, NameError) as e:
+            logger.error(e)
+            return None
 
 
 if __name__ == "__main__":  # pragma: nocover
