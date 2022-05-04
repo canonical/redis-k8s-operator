@@ -138,6 +138,18 @@ class RedisK8sCharm(CharmBase):
         # Create the new config layer
         new_layer = self._redis_layer()
 
+        # NOTE: This block is to allow the lecagy `redis` relation interface to work
+        # with charms still using it. Charms using the relation don't expect Redis to
+        # have a password.
+        new_layer = self._redis_layer()
+        if self._peers.data[self.app].get("enable-password", "true") == "false":
+            logger.warning(
+                "DEPRECATION WARNING - password toggle off will not be supported in the future"
+            )
+            env = new_layer.services["redis"].environment
+            env["ALLOW_EMPTY_PASSWORD"] = "yes"
+            if "REDIS_PASSWORD" in env: del env["REDIS_PASSWORD"]
+
         # Update the Pebble configuration Layer
         if current_layer.services != new_layer.services:
             logger.debug("About to add_layer with layer_config:\n{}".format(new_layer))
@@ -194,7 +206,10 @@ class RedisK8sCharm(CharmBase):
         """Checks is the Redis database is active."""
         try:
             redis = redis_client(
-                self._get_password(), self.config["enable-tls"], self._storage_path
+                self._peers.data[self.app].get("enable-password", "true"),
+                self._get_password(),
+                self.config["enable-tls"],
+                self._storage_path,
             )
             info = redis.info("server")
             version = info["redis_version"]

@@ -7,10 +7,11 @@
 from redis import Redis
 
 
-def redis_client(password: str, ssl=False, storage_path="") -> Redis:
+def redis_client(password_enabled: str, password: str, ssl=False, storage_path="") -> Redis:
     """Helper class that creates a Redis connection with variable parameters.
 
     Args:
+        password_enabled: str to check if the connection needs a password (DEPRECATE)
         password: string with the database password
         ssl: boolean, true if the connection requires TLS encryption
         storage_path: string with the path to the container mounted volume
@@ -18,7 +19,12 @@ def redis_client(password: str, ssl=False, storage_path="") -> Redis:
     Returns:
         Redis class with the connection
     """
-    redis = Redis(password=password)
+    redis = Redis()
+
+    # NOTE: This check will become deprecated in the future
+    if password_enabled == "true":
+        redis = Redis(password=password)
+
     if ssl:
         ca_path = f"{storage_path}/ca.crt"
         redis = Redis(password=password, ssl=ssl, ssl_ca_certs=ca_path)

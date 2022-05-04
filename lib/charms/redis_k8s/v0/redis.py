@@ -93,8 +93,15 @@ class RedisProvides(Object):
         """A class implementing the redis provides relation."""
         super().__init__(charm, "redis")
         self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
+        self.framework.observe(charm.on.redis_relation_created, self._on_relation_created)
         self._port = port
+        self.charm = charm
 
+    def _on_relation_created(self, _):
+        """Handle the relation created event."""
+        self.charm._peers.data[self.charm.app]["enable-password"] = "false"
+        self.charm._update_layer()
+    
     def _on_relation_changed(self, event):
         """Handle the relation changed event."""
         if not self.model.unit.is_leader():
