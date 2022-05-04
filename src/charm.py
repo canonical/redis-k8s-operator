@@ -148,7 +148,8 @@ class RedisK8sCharm(CharmBase):
             )
             env = new_layer.services["redis"].environment
             env["ALLOW_EMPTY_PASSWORD"] = "yes"
-            if "REDIS_PASSWORD" in env: del env["REDIS_PASSWORD"]
+            if "REDIS_PASSWORD" in env:
+                del env["REDIS_PASSWORD"]
 
         # Update the Pebble configuration Layer
         if current_layer.services != new_layer.services:
