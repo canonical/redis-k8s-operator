@@ -99,6 +99,8 @@ class RedisProvides(Object):
 
     def _on_relation_created(self, _):
         """Handle the relation created event."""
+        # TODO: Update warning to point to the new interface once it is created
+        logger.warning("DEPRECATION WARNING - `redis` interface is a legacy interface.")
         self.charm._peers.data[self.charm.app]["enable-password"] = "false"
         self.charm._update_layer()
     
