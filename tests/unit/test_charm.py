@@ -208,10 +208,8 @@ class TestCharm(TestCase):
         self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
         self.assertEqual(rel_data.get("port"), "6379")
 
-    @mock.patch.object(RedisProvides, "_bind_address")
-    def test_pebble_layer_on_relation_created(self, bind_address):
+    def test_pebble_layer_on_relation_created(self):
         self.harness.set_leader(True)
-        bind_address.return_value = "10.2.1.5"
 
         # Create a relation using 'redis' interface
         rel_id = self.harness.add_relation("redis", "wordpress")
