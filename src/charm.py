@@ -138,7 +138,7 @@ class RedisK8sCharm(CharmBase):
         # Create the new config layer
         new_layer = self._redis_layer()
 
-        # NOTE: This block is to allow the lecagy `redis` relation interface to work
+        # NOTE: This block is to allow the legacy `redis` relation interface to work
         # with charms still using it. Charms using the relation don't expect Redis to
         # have a password.
         new_layer = self._redis_layer()

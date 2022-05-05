@@ -19,14 +19,13 @@ def redis_client(password_enabled: str, password: str, ssl=False, storage_path="
     Returns:
         Redis class with the connection
     """
-    redis = Redis()
-
     # NOTE: This check will become deprecated in the future
     if password_enabled == "true":
         redis = Redis(password=password)
-
-    if ssl:
+    elif ssl:
         ca_path = f"{storage_path}/ca.crt"
         redis = Redis(password=password, ssl=ssl, ssl_ca_certs=ca_path)
+    else:
+        redis = Redis()
 
     return redis
