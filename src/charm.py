@@ -52,6 +52,9 @@ class RedisK8sCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
 
+        self._unit_name = self.unit.name
+        self._name = self.model.app.name
+        self._namespace = self.model.name
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
 
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
@@ -61,6 +64,9 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.on.redis_peers_relation_changed, self._peer_relation_changed)
         self.framework.observe(self.on.redis_relation_created, self._on_redis_relation_created)
+
+        self.framework.observe(self.on.redis_peers_relation_joined, self._redis_relation_handler)
+        self.framework.observe(self.on.redis_peers_relation_changed, self._redis_relation_handler)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
         self.framework.observe(
@@ -122,11 +128,55 @@ class RedisK8sCharm(CharmBase):
         logger.info("Beginning update_status")
         self._redis_check()
 
-    def _peer_relation_changed(self, _):
-        """Handle peer_relation_changed."""
-        # NOTE: Updates on legacy `redis` relation only (DEPRECATE)
-        if self._peers.data[self.app].get("enable-password", "true") == "false":
-            self._update_layer()
+    def _redis_relation_handler(self, event):
+        """Handle relation for joining units."""
+        calling_unit = event.unit
+
+        # only the leader unit should configure the replication for joining units
+        if not (self.unit.is_leader() and calling_unit):
+            return
+
+        # pod name associated with the calling unit and the leader
+        calling_pod_name = calling_unit.name.replace("/", "-")
+        leader_pod_name = self._unit_name.replace("/", "-")
+
+        # kubernetes pod hostnames
+        calling_hostname = self._get_pod_hostname(calling_pod_name)
+        leader_hostname = self._get_pod_hostname(leader_pod_name)
+
+
+        # ensure the leader is a master node
+        # TODO: Fill after relation PR
+        # NOTE: (DEPRECATION) if the 'redis' relation is being used,
+        # the host won't have a password
+        # if self._peers.data[self.app].get("enable-password", "true") == "false":
+            # TODO
+        leader_client = redis_client(
+            self._get_password(),
+            host=leader_hostname,
+            ssl=self.config["enable-tls"],
+            storage_path=self._storage_path
+        )
+        leader_client.execute_command("REPLICAOF", "NO", "ONE")
+
+        # redis client on the calling unit
+        calling_client = redis_client(
+            self._get_password(),
+            host=calling_hostname,
+            ssl=self.config["enable-tls"],
+            storage_path=self._storage_path
+        )
+
+        try:
+            logger.info(
+                "Redis server {} becoming replica of {}".format(calling_hostname, leader_hostname)
+            )
+            result = calling_client.execute_command("REPLICAOF", leader_hostname, str(REDIS_PORT))
+            logger.info("Result of replication: {}".format(result))
+ 
+        except BaseException as e:
+            logger.error("Error on replication: {}".format(e))
+            event.defer()
 
     def _on_redis_relation_created(self, _):
         """Handle the relation created event."""
@@ -225,8 +275,8 @@ class RedisK8sCharm(CharmBase):
             redis = redis_client(
                 self._peers.data[self.app].get("enable-password", "true"),
                 self._get_password(),
-                self.config["enable-tls"],
-                self._storage_path,
+                ssl=self.config["enable-tls"],
+                storage_path=self._storage_path,
             )
             info = redis.info("server")
             version = info["redis_version"]
@@ -323,6 +373,10 @@ class RedisK8sCharm(CharmBase):
         except (ModelError, NameError) as e:
             logger.error(e)
             return None
+
+    def _get_pod_hostname(self, pod_name: str) -> str:
+        """Creates the pod hostname from its name."""
+        return f"{pod_name}.{self._name}-endpoints.{self._namespace}.svc.cluster.local"
 
 
 if __name__ == "__main__":  # pragma: nocover
