@@ -28,7 +28,8 @@ from ops.framework import EventBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
 from ops.pebble import Layer
-from redis.exceptions import RedisError
+from redis import Redis
+from redis.exceptions import ConnectionError, RedisError
 
 from redis_client import redis_client
 
@@ -144,28 +145,16 @@ class RedisK8sCharm(CharmBase):
         calling_hostname = self._get_pod_hostname(calling_pod_name)
         leader_hostname = self._get_pod_hostname(leader_pod_name)
 
-
         # ensure the leader is a master node
         # TODO: Fill after relation PR
         # NOTE: (DEPRECATION) if the 'redis' relation is being used,
         # the host won't have a password
         # if self._peers.data[self.app].get("enable-password", "true") == "false":
-            # TODO
-        leader_client = redis_client(
-            self._get_password(),
-            host=leader_hostname,
-            ssl=self.config["enable-tls"],
-            storage_path=self._storage_path
-        )
+        leader_client = self._get_redis_client(leader_hostname)
         leader_client.execute_command("REPLICAOF", "NO", "ONE")
 
         # redis client on the calling unit
-        calling_client = redis_client(
-            self._get_password(),
-            host=calling_hostname,
-            ssl=self.config["enable-tls"],
-            storage_path=self._storage_path
-        )
+        calling_client = self._get_redis_client(calling_hostname)
 
         try:
             logger.info(
@@ -173,9 +162,11 @@ class RedisK8sCharm(CharmBase):
             )
             result = calling_client.execute_command("REPLICAOF", leader_hostname, str(REDIS_PORT))
             logger.info("Result of replication: {}".format(result))
- 
-        except BaseException as e:
+
+        except ConnectionError as e:
             logger.error("Error on replication: {}".format(e))
+            # NOTE: Beware of this defer, can lead to replication taking up to `update_status`
+            # event to become configured
             event.defer()
 
     def _on_redis_relation_created(self, _):
@@ -377,6 +368,15 @@ class RedisK8sCharm(CharmBase):
     def _get_pod_hostname(self, pod_name: str) -> str:
         """Creates the pod hostname from its name."""
         return f"{pod_name}.{self._name}-endpoints.{self._namespace}.svc.cluster.local"
+
+    def _get_redis_client(self, hostname="localhost") -> Redis:
+        """Creates a Redis client on a given hostname."""
+        return redis_client(
+            self._get_password(),
+            host=hostname,
+            ssl=self.config["enable-tls"],
+            storage_path=self._storage_path,
+        )
 
 
 if __name__ == "__main__":  # pragma: nocover
