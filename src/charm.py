@@ -97,6 +97,7 @@ class RedisK8sCharm(CharmBase):
         If no password exists, a new one will be created for accessing Redis. This password
         will be stored on the peer relation databag.
         """
+        self._peers.data[self.app]["leader_host"] = self._get_pod_hostname(self._unit_name.replace("/", "-"))
         if not self._get_password():
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
@@ -258,6 +259,18 @@ class RedisK8sCharm(CharmBase):
                 f"--tls-key-file {self._storage_path}/redis.key",
                 f"--tls-ca-cert-file {self._storage_path}/ca.crt",
             ]
+
+        # ADD "REPLICA OF" FOR NON LEADER UNITS
+        if not self.unit.is_leader():
+            leader_hostname = self._peers.data[self.app].get("leader_host", None)
+            if leader_hostname is None:
+                logger.error("No leader hostname set")
+            else:
+                extra_flags += [
+                    f"--replicaof {leader_hostname} {REDIS_PORT}",
+                    f"--masterauth {self._get_password()}"
+                ]
+
         return " ".join(extra_flags)
 
     def _redis_check(self) -> None:
