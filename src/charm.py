@@ -143,7 +143,9 @@ class RedisK8sCharm(CharmBase):
         # have a password.
         new_layer = self._redis_layer()
         if self._peers.data[self.app].get("enable-password", "true") == "false":
-            logger.warning("DEPRECATION WARNING - charm configured with password off")
+            logger.warning(
+                "DEPRECATION WARNING - password off, this will be removed on later versions"
+            )
             env = new_layer.services["redis"].environment
             env["ALLOW_EMPTY_PASSWORD"] = "yes"
             if "REDIS_PASSWORD" in env:
