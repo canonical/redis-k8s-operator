@@ -208,6 +208,32 @@ class TestCharm(TestCase):
         self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
         self.assertEqual(rel_data.get("port"), "6379")
 
+    def test_pebble_layer_on_relation_created(self):
+        self.harness.set_leader(True)
+
+        # Create a relation using 'redis' interface
+        rel_id = self.harness.add_relation("redis", "wordpress")
+        self.harness.add_relation_unit(rel_id, "wordpress/0")
+        self.harness._emit_relation_created("redis", rel_id, "wordpress/0")
+
+        # Check that the resulting plan does not have a password
+        found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
+        expected_plan = {
+            "services": {
+                "redis": {
+                    "override": "replace",
+                    "summary": "Redis service",
+                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "startup": "enabled",
+                    "environment": {
+                        "ALLOW_EMPTY_PASSWORD": "yes",
+                        "REDIS_EXTRA_FLAGS": "",
+                    },
+                }
+            },
+        }
+        self.assertEqual(found_plan, expected_plan)
+
     @mock.patch("charm.RedisK8sCharm._store_certificates")
     def test_attach_resource(self, _store_certificates):
         # Check that there are no resources initially
