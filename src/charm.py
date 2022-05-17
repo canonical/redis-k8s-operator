@@ -59,6 +59,7 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self._config_changed)
         self.framework.observe(self.on.upgrade_charm, self._upgrade_charm)
         self.framework.observe(self.on.update_status, self._update_status)
+        self.framework.observe(self.on.redis_peers_relation_changed, self._peer_relation_changed)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
         self.framework.observe(
@@ -120,6 +121,12 @@ class RedisK8sCharm(CharmBase):
         logger.info("Beginning update_status")
         self._redis_check()
 
+    def _peer_relation_changed(self, _):
+        """Handle peer_relation_changed."""
+        # NOTE: Updates on legacy `redis` relation only (DEPRECATE)
+        if self._peers.data[self.app].get("enable-password", "true") == "false":
+            self._update_layer()
+
     def _update_layer(self) -> None:
         """Update the Pebble layer.
 
@@ -137,6 +144,19 @@ class RedisK8sCharm(CharmBase):
 
         # Create the new config layer
         new_layer = self._redis_layer()
+
+        # NOTE: This block is to allow the legacy `redis` relation interface to work
+        # with charms still using it. Charms using the relation don't expect Redis to
+        # have a password.
+        new_layer = self._redis_layer()
+        if self._peers.data[self.app].get("enable-password", "true") == "false":
+            logger.warning(
+                "DEPRECATION WARNING - password off, this will be removed on later versions"
+            )
+            env = new_layer.services["redis"].environment
+            env["ALLOW_EMPTY_PASSWORD"] = "yes"
+            if "REDIS_PASSWORD" in env:
+                del env["REDIS_PASSWORD"]
 
         # Update the Pebble configuration Layer
         if current_layer.services != new_layer.services:
@@ -194,7 +214,10 @@ class RedisK8sCharm(CharmBase):
         """Checks is the Redis database is active."""
         try:
             redis = redis_client(
-                self._get_password(), self.config["enable-tls"], self._storage_path
+                self._peers.data[self.app].get("enable-password", "true"),
+                self._get_password(),
+                self.config["enable-tls"],
+                self._storage_path,
             )
             info = redis.info("server")
             version = info["redis_version"]
