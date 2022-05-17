@@ -59,6 +59,7 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self._config_changed)
         self.framework.observe(self.on.upgrade_charm, self._upgrade_charm)
         self.framework.observe(self.on.update_status, self._update_status)
+        self.framework.observe(self.on.redis_peers_relation_changed, self._peer_relation_changed)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
         self.framework.observe(
@@ -119,6 +120,12 @@ class RedisK8sCharm(CharmBase):
         """
         logger.info("Beginning update_status")
         self._redis_check()
+
+    def _peer_relation_changed(self, _):
+        """Handle peer_relation_changed."""
+        # NOTE: Updates on legacy `redis` relation only (DEPRECATE)
+        if self._peers.data[self.app].get("enable-password", "true") == "false":
+            self._update_layer()
 
     def _update_layer(self) -> None:
         """Update the Pebble layer.
