@@ -155,9 +155,14 @@ class RedisK8sCharm(CharmBase):
             # if self._peers.data[self.app].get("enable-password", "true") == "false":
             leader_client = self._get_redis_client(leader_hostname)
             logger.info("Setting {} as new master".format(leader_pod_name))
-            leader_client.execute_command("REPLICAOF", "NO", "ONE")
+            leader_client.slaveof()
 
         self._update_layer()
+
+        # update layer should leave the unit in active status
+        if self.unit.status != ActiveStatus():
+            event.defer()
+            return
 
     def _on_redis_relation_created(self, _):
         """Handle the relation created event."""
