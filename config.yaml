@@ -9,3 +9,10 @@ options:
       Enabling TLS for the standard port of redis-server.
       This option should be enabled after uploading the
       corresponding TLS files as resources.
+  
+  enable-replication:
+    default: true
+    type: boolean
+    description: >
+      Enables deployment to be replicated. All units will
+      become replicas of the leader unit.

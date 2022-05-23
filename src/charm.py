@@ -29,7 +29,7 @@ from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
 from ops.pebble import Layer
 from redis import Redis
-from redis.exceptions import ConnectionError, RedisError
+from redis.exceptions import RedisError
 
 from redis_client import redis_client
 
@@ -97,7 +97,9 @@ class RedisK8sCharm(CharmBase):
         If no password exists, a new one will be created for accessing Redis. This password
         will be stored on the peer relation databag.
         """
-        self._peers.data[self.app]["leader_host"] = self._get_pod_hostname(self._unit_name.replace("/", "-"))
+        self._peers.data[self.app]["leader_host"] = self._get_pod_hostname(
+            self._unit_name.replace("/", "-")
+        )
         if not self._get_password():
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
@@ -135,40 +137,27 @@ class RedisK8sCharm(CharmBase):
         calling_unit = event.unit
 
         # only the leader unit should configure the replication for joining units
-        if not (self.unit.is_leader() and calling_unit):
+        if not calling_unit:
+            event.defer()
             return
 
-        # pod name associated with the calling unit and the leader
-        calling_pod_name = calling_unit.name.replace("/", "-")
-        leader_pod_name = self._unit_name.replace("/", "-")
-
-        # kubernetes pod hostnames
-        calling_hostname = self._get_pod_hostname(calling_pod_name)
-        leader_hostname = self._get_pod_hostname(leader_pod_name)
-
         # ensure the leader is a master node
-        # TODO: Fill after relation PR
-        # NOTE: (DEPRECATION) if the 'redis' relation is being used,
-        # the host won't have a password
-        # if self._peers.data[self.app].get("enable-password", "true") == "false":
-        leader_client = self._get_redis_client(leader_hostname)
-        leader_client.execute_command("REPLICAOF", "NO", "ONE")
+        if self.unit.is_leader():
+            # pod name associated with the calling unit and the leader
+            leader_pod_name = self._unit_name.replace("/", "-")
 
-        # redis client on the calling unit
-        calling_client = self._get_redis_client(calling_hostname)
+            # kubernetes pod hostnames
+            leader_hostname = self._get_pod_hostname(leader_pod_name)
 
-        try:
-            logger.info(
-                "Redis server {} becoming replica of {}".format(calling_hostname, leader_hostname)
-            )
-            result = calling_client.execute_command("REPLICAOF", leader_hostname, str(REDIS_PORT))
-            logger.info("Result of replication: {}".format(result))
+            # TODO: Fill after relation PR
+            # NOTE: (DEPRECATION) if the 'redis' relation is being used,
+            # the host won't have a password
+            # if self._peers.data[self.app].get("enable-password", "true") == "false":
+            leader_client = self._get_redis_client(leader_hostname)
+            logger.info("Setting {} as new master".format(leader_pod_name))
+            leader_client.execute_command("REPLICAOF", "NO", "ONE")
 
-        except ConnectionError as e:
-            logger.error("Error on replication: {}".format(e))
-            # NOTE: Beware of this defer, can lead to replication taking up to `update_status`
-            # event to become configured
-            event.defer()
+        self._update_layer()
 
     def _on_redis_relation_created(self, _):
         """Handle the relation created event."""
@@ -188,6 +177,10 @@ class RedisK8sCharm(CharmBase):
 
         if not container.can_connect():
             self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
+            return
+
+        if not self._valid_app_databag():
+            self.unit.status = WaitingStatus("Waiting for peer data to be updated")
             return
 
         # Get current config
@@ -260,15 +253,15 @@ class RedisK8sCharm(CharmBase):
                 f"--tls-ca-cert-file {self._storage_path}/ca.crt",
             ]
 
-        # ADD "REPLICA OF" FOR NON LEADER UNITS
-        if not self.unit.is_leader():
+        # Non leader units will be replicas of the leader unit
+        if self.config["enable-replication"] and not self.unit.is_leader():
             leader_hostname = self._peers.data[self.app].get("leader_host", None)
             if leader_hostname is None:
                 logger.error("No leader hostname set")
             else:
                 extra_flags += [
                     f"--replicaof {leader_hostname} {REDIS_PORT}",
-                    f"--masterauth {self._get_password()}"
+                    f"--masterauth {self._get_password()}",
                 ]
 
         return " ".join(extra_flags)
@@ -334,6 +327,12 @@ class RedisK8sCharm(CharmBase):
         """
         resources = ["cert-file", "key-file", "ca-cert-file"]
         return [self._retrieve_resource(res) for res in resources]
+
+    def _valid_app_databag(self):
+        """Check if the peer databag has been populated."""
+        password = self._get_password()
+        leader_host = self.unit.data[self.app].get("leader-host", "")
+        return bool(password and leader_host)
 
     def _generate_password(self) -> str:
         """Generate a random 16 character password string.
