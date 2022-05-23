@@ -8,11 +8,8 @@ from redis import Redis
 
 
 def redis_client(
-    password_enabled: str,
-    password: str,
-    host="localhost",
-    ssl=False,
-    storage_path="") -> Redis:
+    password_enabled: str, password: str, host="localhost", ssl=False, storage_path=""
+) -> Redis:
     """Helper class that creates a Redis connection with variable parameters.
 
     Args:

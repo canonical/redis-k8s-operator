@@ -29,7 +29,7 @@ from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
 from ops.pebble import Layer
 from redis import Redis
-from redis.exceptions import RedisError
+from redis.exceptions import ConnectionError, RedisError
 
 from redis_client import redis_client
 
@@ -63,11 +63,10 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self._config_changed)
         self.framework.observe(self.on.upgrade_charm, self._upgrade_charm)
         self.framework.observe(self.on.update_status, self._update_status)
-        self.framework.observe(self.on.redis_peers_relation_changed, self._peer_relation_changed)
-        self.framework.observe(self.on.redis_relation_created, self._on_redis_relation_created)
 
-        self.framework.observe(self.on.redis_peers_relation_joined, self._redis_relation_handler)
-        self.framework.observe(self.on.redis_peers_relation_changed, self._redis_relation_handler)
+        self.framework.observe(self.on.redis_relation_created, self._on_redis_relation_created)
+        self.framework.observe(self.on.redis_peers_relation_joined, self._peer_relation_handler)
+        self.framework.observe(self.on.redis_peers_relation_changed, self._peer_relation_handler)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
         self.framework.observe(
@@ -97,10 +96,12 @@ class RedisK8sCharm(CharmBase):
         If no password exists, a new one will be created for accessing Redis. This password
         will be stored on the peer relation databag.
         """
-        self._peers.data[self.app]["leader_host"] = self._get_pod_hostname(
-            self._unit_name.replace("/", "-")
-        )
+        leader_hostname = self._get_pod_hostname(self._unit_name.replace("/", "-"))
+        logger.info("Setting leader-host to {}".format(leader_hostname))
+        self._peers.data[self.app]["leader-host"] = leader_hostname
+
         if not self._get_password():
+            logger.info("Creating password for application")
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
     def _config_changed(self, event: EventBase) -> None:
@@ -132,7 +133,7 @@ class RedisK8sCharm(CharmBase):
         logger.info("Beginning update_status")
         self._redis_check()
 
-    def _redis_relation_handler(self, event):
+    def _peer_relation_handler(self, event):
         """Handle relation for joining units."""
         calling_unit = event.unit
 
@@ -148,14 +149,18 @@ class RedisK8sCharm(CharmBase):
 
             # kubernetes pod hostnames
             leader_hostname = self._get_pod_hostname(leader_pod_name)
-
-            # TODO: Fill after relation PR
-            # NOTE: (DEPRECATION) if the 'redis' relation is being used,
-            # the host won't have a password
-            # if self._peers.data[self.app].get("enable-password", "true") == "false":
-            leader_client = self._get_redis_client(leader_hostname)
+            leader_client = self._get_redis_client()
             logger.info("Setting {} as new master".format(leader_pod_name))
-            leader_client.slaveof()
+            try:
+                leader_client.slaveof()
+            except ConnectionError as e:
+                logger.error(
+                    "Failed to connect to redis instance: {} with error: {}".format(
+                        leader_hostname, e
+                    )
+                )
+                event.defer()
+                return
 
         self._update_layer()
 
@@ -260,7 +265,7 @@ class RedisK8sCharm(CharmBase):
 
         # Non leader units will be replicas of the leader unit
         if self.config["enable-replication"] and not self.unit.is_leader():
-            leader_hostname = self._peers.data[self.app].get("leader_host", None)
+            leader_hostname = self._peers.data[self.app].get("leader-host", None)
             if leader_hostname is None:
                 logger.error("No leader hostname set")
             else:
@@ -336,7 +341,8 @@ class RedisK8sCharm(CharmBase):
     def _valid_app_databag(self):
         """Check if the peer databag has been populated."""
         password = self._get_password()
-        leader_host = self.unit.data[self.app].get("leader-host", "")
+        leader_host = self._peers.data[self.app].get("leader-host", "")
+
         return bool(password and leader_host)
 
     def _generate_password(self) -> str:
@@ -389,6 +395,7 @@ class RedisK8sCharm(CharmBase):
     def _get_redis_client(self, hostname="localhost") -> Redis:
         """Creates a Redis client on a given hostname."""
         return redis_client(
+            self._peers.data[self.app].get("enable-password", "true"),
             self._get_password(),
             host=hostname,
             ssl=self.config["enable-tls"],
