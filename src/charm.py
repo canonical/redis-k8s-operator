@@ -135,14 +135,8 @@ class RedisK8sCharm(CharmBase):
 
     def _peer_relation_handler(self, event):
         """Handle relation for joining units."""
-        calling_unit = event.unit
-
-        # only the leader unit should configure the replication for joining units
-        if not calling_unit:
-            event.defer()
-            return
-
-        # ensure the leader is a master node
+        # FIXME: check that unit is leader replica as well,
+        # if unit is already leader replica this block is not needed.
         if self.unit.is_leader():
             # pod name associated with the calling unit and the leader
             leader_pod_name = self._unit_name.replace("/", "-")
@@ -150,8 +144,9 @@ class RedisK8sCharm(CharmBase):
             # kubernetes pod hostnames
             leader_hostname = self._get_pod_hostname(leader_pod_name)
             leader_client = self._get_redis_client()
-            logger.info("Setting {} as new master".format(leader_pod_name))
+            # ensure the leader is a master node
             try:
+                logger.info("Setting {} as new master".format(leader_pod_name))
                 leader_client.slaveof()
             except ConnectionError as e:
                 logger.error(
@@ -162,6 +157,7 @@ class RedisK8sCharm(CharmBase):
                 event.defer()
                 return
 
+        logger.info("UPDATING LAYER ON PEER HANDLER")
         self._update_layer()
 
         # update layer should leave the unit in active status
@@ -202,7 +198,6 @@ class RedisK8sCharm(CharmBase):
         # NOTE: This block is to allow the legacy `redis` relation interface to work
         # with charms still using it. Charms using the relation don't expect Redis to
         # have a password.
-        new_layer = self._redis_layer()
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             logger.warning(
                 "DEPRECATION WARNING - password off, this will be removed on later versions"
@@ -269,10 +264,11 @@ class RedisK8sCharm(CharmBase):
             if leader_hostname is None:
                 logger.error("No leader hostname set")
             else:
-                extra_flags += [
-                    f"--replicaof {leader_hostname} {REDIS_PORT}",
-                    f"--masterauth {self._get_password()}",
-                ]
+                extra_flags += [f"--replicaof {leader_hostname} {REDIS_PORT}"]
+                # NOTE: (DEPRECATE) This check will evaluate to false in the case the `redis`
+                # relation interface is being used.
+                if self._peers.data[self.app].get("enable-password", "true") == "true":
+                    extra_flags += [f"--masterauth {self._get_password()}"]
 
         return " ".join(extra_flags)
 
