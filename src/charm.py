@@ -261,14 +261,11 @@ class RedisK8sCharm(CharmBase):
         # Non leader units will be replicas of the leader unit
         if self.config["enable-replication"] and not self.unit.is_leader():
             leader_hostname = self._peers.data[self.app].get("leader-host", None)
-            if leader_hostname is None:
-                logger.error("No leader hostname set")
-            else:
-                extra_flags += [f"--replicaof {leader_hostname} {REDIS_PORT}"]
-                # NOTE: (DEPRECATE) This check will evaluate to false in the case the `redis`
-                # relation interface is being used.
-                if self._peers.data[self.app].get("enable-password", "true") == "true":
-                    extra_flags += [f"--masterauth {self._get_password()}"]
+            extra_flags += [f"--replicaof {leader_hostname} {REDIS_PORT}"]
+            # NOTE: (DEPRECATE) This check will evaluate to false in the case the `redis`
+            # relation interface is being used.
+            if self._peers.data[self.app].get("enable-password", "true") == "true":
+                extra_flags += [f"--masterauth {self._get_password()}"]
 
         return " ".join(extra_flags)
 
