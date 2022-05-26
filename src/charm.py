@@ -60,6 +60,7 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.upgrade_charm, self._upgrade_charm)
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.on.redis_peers_relation_changed, self._peer_relation_changed)
+        self.framework.observe(self.on.redis_relation_created, self._on_redis_relation_created)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
         self.framework.observe(
@@ -125,6 +126,14 @@ class RedisK8sCharm(CharmBase):
         """Handle peer_relation_changed."""
         # NOTE: Updates on legacy `redis` relation only (DEPRECATE)
         if self._peers.data[self.app].get("enable-password", "true") == "false":
+            self._update_layer()
+
+    def _on_redis_relation_created(self, _):
+        """Handle the relation created event."""
+        # TODO: Update warning to point to the new interface once it is created
+        logger.warning("DEPRECATION WARNING - `redis` interface is a legacy interface.")
+        if self.unit.is_leader():
+            self._peers.data[self.app]["enable-password"] = "false"
             self._update_layer()
 
     def _update_layer(self) -> None:
