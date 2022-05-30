@@ -156,7 +156,6 @@ class RedisK8sCharm(CharmBase):
                 event.defer()
                 return
 
-        logger.info("UPDATING LAYER ON PEER HANDLER")
         self._update_layer()
 
         # update layer should leave the unit in active status
@@ -270,7 +269,7 @@ class RedisK8sCharm(CharmBase):
             if self._peers.data[self.app].get("enable-password", "true") == "true":
                 extra_flags += [f"--masterauth {self._get_password()}"]
 
-        logger.info(f'EXTRA FLAGS: {extra_flags}')
+        logger.debug("Extra flags: {}".format(extra_flags))
 
         return " ".join(extra_flags)
 
@@ -331,9 +330,19 @@ class RedisK8sCharm(CharmBase):
         resources = ["cert-file", "key-file", "ca-cert-file"]
         return [self._retrieve_resource(res) for res in resources]
 
-    def _valid_app_databag(self):
-        """Check if the peer databag has been populated."""
+    def _valid_app_databag(self) -> bool:
+        """Check if the peer databag has been populated.
+
+        Returns:
+            bool: True if the databag has been populated, false otherwise
+        """
         password = self._get_password()
+
+        # NOTE: (DEPRECATE) Only used for the redis legacy relation. The password is not relevant
+        # when that relation is used
+        if self._peers.data[self.app].get("enable-password", "true") == "false":
+            password = True
+
         leader_host = self._peers.data[self.app].get("leader-host", "")
 
         return bool(password and leader_host)
@@ -355,6 +364,10 @@ class RedisK8sCharm(CharmBase):
             String with the password
         """
         data = self._peers.data[self.app]
+        # NOTE: (DEPRECATE) When using redis legacy relation, no password is used
+        if data.get("enable-password", "true") == "false":
+            return None
+
         return data.get(PEER_PASSWORD_KEY, None)
 
     def _store_certificates(self) -> None:
