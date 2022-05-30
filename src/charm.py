@@ -400,7 +400,13 @@ class RedisK8sCharm(CharmBase):
         return f"{pod_name}.{self._name}-endpoints.{self._namespace}.svc.cluster.local"
 
     def _get_redis_client(self, hostname="localhost") -> Redis:
-        """Creates a Redis client on a given hostname."""
+        """Creates a Redis client on a given hostname.
+
+        All parameters are passed, will default to the same values under `Redis` constructor
+        
+        Returns:
+            Redis: redis client
+        """
         ca_cert_path = self._retrieve_resource("ca-cert-file")
 
         return Redis(
