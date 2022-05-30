@@ -262,7 +262,7 @@ class RedisK8sCharm(CharmBase):
             extra_flags += [f"--replicaof {leader_hostname} {REDIS_PORT}"]
 
             if self.config["enable-tls"]:
-                extra_flags += [f"--tls-replication yes"]
+                extra_flags += ["--tls-replication yes"]
 
             # NOTE: (DEPRECATE) This check will evaluate to false in the case the `redis`
             # relation interface is being used.
@@ -338,8 +338,8 @@ class RedisK8sCharm(CharmBase):
         """
         password = self._get_password()
 
-        # NOTE: (DEPRECATE) Only used for the redis legacy relation. The password is not relevant
-        # when that relation is used
+        # NOTE: (DEPRECATE) Only used for the redis legacy relation. The password
+        # is not relevant when that relation is used
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             password = True
 
@@ -408,7 +408,7 @@ class RedisK8sCharm(CharmBase):
             port=REDIS_PORT,
             password=self._get_password(),
             ssl=self.config["enable-tls"],
-            ssl_ca_certs=ca_cert_path
+            ssl_ca_certs=ca_cert_path,
         )
 
 
