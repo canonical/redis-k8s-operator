@@ -31,8 +31,6 @@ from ops.pebble import Layer
 from redis import Redis
 from redis.exceptions import ConnectionError, RedisError
 
-from redis_client import redis_client
-
 REDIS_PORT = 6379
 WAITING_MESSAGE = "Waiting for Redis..."
 CONFIG_PATH = "/etc/redis/"
@@ -80,6 +78,7 @@ class RedisK8sCharm(CharmBase):
 
         Updates the Pebble layer if needed.
         """
+        self._store_certificates()
         self._update_layer()
 
     def _upgrade_charm(self, _) -> None:
@@ -245,7 +244,7 @@ class RedisK8sCharm(CharmBase):
         """Generate the REDIS_EXTRA_FLAGS environment variable for the container.
 
         Will check config options to decide the extra commands passed at the
-        redis-server service. Currently only TLS is an option.
+        redis-server service.
         """
         extra_flags = []
         if self.config["enable-tls"]:
@@ -262,22 +261,23 @@ class RedisK8sCharm(CharmBase):
         if self.config["enable-replication"] and not self.unit.is_leader():
             leader_hostname = self._peers.data[self.app].get("leader-host", None)
             extra_flags += [f"--replicaof {leader_hostname} {REDIS_PORT}"]
+
+            if self.config["enable-tls"]:
+                extra_flags += [f"--tls-replication yes"]
+
             # NOTE: (DEPRECATE) This check will evaluate to false in the case the `redis`
             # relation interface is being used.
             if self._peers.data[self.app].get("enable-password", "true") == "true":
                 extra_flags += [f"--masterauth {self._get_password()}"]
+
+        logger.info(f'EXTRA FLAGS: {extra_flags}')
 
         return " ".join(extra_flags)
 
     def _redis_check(self) -> None:
         """Checks is the Redis database is active."""
         try:
-            redis = redis_client(
-                self._peers.data[self.app].get("enable-password", "true"),
-                self._get_password(),
-                ssl=self.config["enable-tls"],
-                storage_path=self._storage_path,
-            )
+            redis = self._get_redis_client()
             info = redis.info("server")
             version = info["redis_version"]
             self.unit.status = ActiveStatus()
@@ -348,14 +348,14 @@ class RedisK8sCharm(CharmBase):
         password = "".join([secrets.choice(choices) for i in range(16)])
         return password
 
-    def _get_password(self) -> str:
+    def _get_password(self) -> Optional[str]:
         """Get the current admin password for Redis.
 
         Returns:
             String with the password
         """
         data = self._peers.data[self.app]
-        return data.get(PEER_PASSWORD_KEY, "")
+        return data.get(PEER_PASSWORD_KEY, None)
 
     def _store_certificates(self) -> None:
         """Copy the TLS certificates to the redis container."""
@@ -364,6 +364,7 @@ class RedisK8sCharm(CharmBase):
         container = self.unit.get_container("redis")
 
         # Copy the files from the resources location to the redis container.
+        # TODO handle error case
         for cert_path in cert_paths:
             with open(cert_path, "r") as f:
                 container.push((f"{self._storage_path}/{cert_path.name}"), f)
@@ -378,7 +379,7 @@ class RedisK8sCharm(CharmBase):
             # Fetch the resource path
             return self.model.resources.fetch(resource)
         except (ModelError, NameError) as e:
-            logger.error(e)
+            logger.warning(e)
             return None
 
     def _get_pod_hostname(self, pod_name: str) -> str:
@@ -387,12 +388,14 @@ class RedisK8sCharm(CharmBase):
 
     def _get_redis_client(self, hostname="localhost") -> Redis:
         """Creates a Redis client on a given hostname."""
-        return redis_client(
-            self._peers.data[self.app].get("enable-password", "true"),
-            self._get_password(),
+        ca_cert_path = self._retrieve_resource("ca-cert-file")
+
+        return Redis(
             host=hostname,
+            port=REDIS_PORT,
+            password=self._get_password(),
             ssl=self.config["enable-tls"],
-            storage_path=self._storage_path,
+            ssl_ca_certs=ca_cert_path
         )
 
 
