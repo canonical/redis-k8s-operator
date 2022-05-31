@@ -16,6 +16,7 @@
 from unittest import TestCase, mock
 
 from charms.redis_k8s.v0.redis import RedisProvides
+from ops.framework import EventBase
 from ops.model import (
     ActiveStatus,
     BlockedStatus,
@@ -26,9 +27,10 @@ from ops.model import (
 from ops.pebble import ServiceInfo
 from ops.testing import Harness
 from redis import Redis
-from redis.exceptions import RedisError
+from redis.exceptions import ConnectionError, RedisError
 
 from charm import RedisK8sCharm
+from tests.helpers import APPLICATION_DATA
 
 
 class TestCharm(TestCase):
@@ -302,3 +304,77 @@ class TestCharm(TestCase):
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
+
+    @mock.patch.object(Redis, "slaveof")
+    def test_leader_unit_as_master(self, slaveof):
+        self.harness.set_leader(True)
+
+        # Trigger peer_relation_joined/changed
+        rel = self.harness.charm.model.get_relation(self._peer_relation)
+        self.harness.add_relation_unit(rel.id, "redis-k8s/1")
+
+        # Check that the leader unit has been set to master replica
+        slaveof.assert_called()
+
+        found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
+        expected_plan = {
+            "services": {
+                "redis": {
+                    "override": "replace",
+                    "summary": "Redis service",
+                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_EXTRA_FLAGS": "",
+                    },
+                }
+            },
+        }
+
+        self.assertEqual(expected_plan, found_plan)
+        self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
+
+    @mock.patch.object(EventBase, "defer")
+    @mock.patch.object(Redis, "slaveof")
+    def test_error_on_leader_unit_as_master(self, slaveof, defer):
+        self.harness.set_leader(True)
+        slaveof.side_effect = ConnectionError()
+
+        # Trigger peer_relation_joined/changed
+        rel = self.harness.charm.model.get_relation(self._peer_relation)
+        self.harness.add_relation_unit(rel.id, "redis-k8s/1")
+
+        defer.assert_called()
+
+    def test_non_leader_unit_as_replica(self):
+        rel = self.harness.charm.model.get_relation(self._peer_relation)
+        # Trigger peer_relation_joined/changed
+        self.harness.add_relation_unit(rel.id, "redis-k8s/1")
+        # Simulate an update to the application databag made by the leader unit
+        self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
+
+        leader_hostname = APPLICATION_DATA["leader-host"]
+        redis_port = 6379
+        extra_flags = [
+            f"--replicaof {leader_hostname} {redis_port}",
+            f"--masterauth {self.harness.charm._get_password()}",
+        ]
+        expected_plan = {
+            "services": {
+                "redis": {
+                    "override": "replace",
+                    "summary": "Redis service",
+                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_EXTRA_FLAGS": " ".join(extra_flags),
+                    },
+                }
+            },
+        }
+        found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
+
+        self.assertEqual(expected_plan, found_plan)
+        self.assertEqual(self.harness.charm.unit.status, ActiveStatus())

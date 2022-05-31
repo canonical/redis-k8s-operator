@@ -403,7 +403,7 @@ class RedisK8sCharm(CharmBase):
         """Creates a Redis client on a given hostname.
 
         All parameters are passed, will default to the same values under `Redis` constructor
-        
+
         Returns:
             Redis: redis client
         """
