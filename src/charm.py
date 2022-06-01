@@ -36,6 +36,7 @@ WAITING_MESSAGE = "Waiting for Redis..."
 CONFIG_PATH = "/etc/redis/"
 PEER = "redis-peers"
 PEER_PASSWORD_KEY = "redis-password"
+LEADER_HOST_KEY = "leader-host"
 
 
 logger = logging.getLogger(__name__)
@@ -97,7 +98,7 @@ class RedisK8sCharm(CharmBase):
         """
         leader_hostname = self._get_pod_hostname(self._unit_name.replace("/", "-"))
         logger.info("Setting leader-host to {}".format(leader_hostname))
-        self._peers.data[self.app]["leader-host"] = leader_hostname
+        self._peers.data[self.app][LEADER_HOST_KEY] = leader_hostname
 
         if not self._get_password():
             logger.info("Creating password for application")
@@ -258,7 +259,7 @@ class RedisK8sCharm(CharmBase):
 
         # Non leader units will be replicas of the leader unit
         if self.config["enable-replication"] and not self.unit.is_leader():
-            leader_hostname = self._peers.data[self.app].get("leader-host", None)
+            leader_hostname = self._peers.data[self.app].get(LEADER_HOST_KEY, None)
             extra_flags += [f"--replicaof {leader_hostname} {REDIS_PORT}"]
 
             if self.config["enable-tls"]:
@@ -343,7 +344,7 @@ class RedisK8sCharm(CharmBase):
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             password = True
 
-        leader_host = self._peers.data[self.app].get("leader-host", "")
+        leader_host = self._peers.data[self.app].get(LEADER_HOST_KEY, "")
 
         return bool(password and leader_host)
 
