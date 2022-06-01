@@ -19,3 +19,4 @@ APPLICATION_DATA = {
     "leader-host": "leader-host",
     "redis-password": "password",
 }
+NUM_UNITS = 3
