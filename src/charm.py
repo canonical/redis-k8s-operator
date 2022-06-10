@@ -16,6 +16,8 @@
 
 """Charm code for Redis service."""
 
+from contextlib import contextmanager
+from email import contentmanager
 import logging
 import secrets
 import socket
