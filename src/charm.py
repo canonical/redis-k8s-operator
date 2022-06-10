@@ -16,11 +16,10 @@
 
 """Charm code for Redis service."""
 
-from contextlib import contextmanager
-from email import contentmanager
 import logging
 import secrets
 import string
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional
 
@@ -393,17 +392,17 @@ class RedisK8sCharm(CharmBase):
         """
         ca_cert_path = self._retrieve_resource("ca-cert-file")
         client = Redis(
-                host=hostname,
-                port=REDIS_PORT,
-                password=self._get_password(),
-                ssl=self.config["enable-tls"],
-                ssl_ca_certs=ca_cert_path,
+            host=hostname,
+            port=REDIS_PORT,
+            password=self._get_password(),
+            ssl=self.config["enable-tls"],
+            ssl_ca_certs=ca_cert_path,
         )
         try:
             yield client
         finally:
             client.close()
-            
+
 
 if __name__ == "__main__":  # pragma: nocover
     main(RedisK8sCharm)
