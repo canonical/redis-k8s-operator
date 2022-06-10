@@ -16,6 +16,8 @@
 
 """Charm code for Redis service."""
 
+from contextlib import contextmanager
+from email import contentmanager
 import logging
 import secrets
 import string
@@ -252,10 +254,10 @@ class RedisK8sCharm(CharmBase):
         return " ".join(extra_flags)
 
     def _redis_check(self) -> None:
-        """Checks is the Redis database is active."""
+        """Checks if the Redis database is active."""
         try:
-            redis = self._get_redis_client()
-            info = redis.info("server")
+            with self._redis_client() as redis:
+                info = redis.info("server")
             version = info["redis_version"]
             self.unit.status = ActiveStatus()
             self.unit.set_workload_version(version)
@@ -311,7 +313,7 @@ class RedisK8sCharm(CharmBase):
     @property
     def _current_master(self) -> Optional[str]:
         """Get the current master."""
-        return self._peers.data[self.app].get(LEADER_HOST_KEY, None)
+        return self._peers.data[self.app].get(LEADER_HOST_KEY)
 
     def _valid_app_databag(self) -> bool:
         """Check if the peer databag has been populated.
@@ -349,7 +351,7 @@ class RedisK8sCharm(CharmBase):
         if data.get("enable-password", "true") == "false":
             return None
 
-        return data.get(PEER_PASSWORD_KEY, None)
+        return data.get(PEER_PASSWORD_KEY)
 
     def _store_certificates(self) -> None:
         """Copy the TLS certificates to the redis container."""
@@ -380,7 +382,8 @@ class RedisK8sCharm(CharmBase):
         """Creates the pod hostname from its name."""
         return f"{pod_name}.{self._name}-endpoints.{self._namespace}.svc.cluster.local"
 
-    def _get_redis_client(self, hostname="localhost") -> Redis:
+    @contextmanager
+    def _redis_client(self, hostname="localhost") -> Redis:
         """Creates a Redis client on a given hostname.
 
         All parameters are passed, will default to the same values under `Redis` constructor
@@ -389,15 +392,18 @@ class RedisK8sCharm(CharmBase):
             Redis: redis client
         """
         ca_cert_path = self._retrieve_resource("ca-cert-file")
-
-        return Redis(
-            host=hostname,
-            port=REDIS_PORT,
-            password=self._get_password(),
-            ssl=self.config["enable-tls"],
-            ssl_ca_certs=ca_cert_path,
+        client = Redis(
+                host=hostname,
+                port=REDIS_PORT,
+                password=self._get_password(),
+                ssl=self.config["enable-tls"],
+                ssl_ca_certs=ca_cert_path,
         )
-
+        try:
+            yield client
+        finally:
+            client.close()
+            
 
 if __name__ == "__main__":  # pragma: nocover
     main(RedisK8sCharm)
