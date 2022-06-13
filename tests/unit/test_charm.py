@@ -335,5 +335,3 @@ class TestCharm(TestCase):
 
         self.assertEqual(expected_plan, found_plan)
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
-
-        self.harness.charm.on.sentinel_pebble_ready.emit()
