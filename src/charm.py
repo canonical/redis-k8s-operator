@@ -18,6 +18,7 @@
 
 import logging
 import secrets
+import socket
 import string
 from contextlib import contextmanager
 from pathlib import Path
@@ -97,7 +98,7 @@ class RedisK8sCharm(CharmBase):
         will be stored on the peer relation databag.
         """
         if self._current_master is None:
-            leader_hostname = self._get_pod_hostname(self._unit_name.replace("/", "-"))
+            leader_hostname = self._get_pod_hostname()
             logger.info("Initial replication, setting leader-host to {}".format(leader_hostname))
             self._peers.data[self.app][LEADER_HOST_KEY] = leader_hostname
 
@@ -377,9 +378,9 @@ class RedisK8sCharm(CharmBase):
             logger.warning(e)
             return None
 
-    def _get_pod_hostname(self, pod_name: str) -> str:
+    def _get_pod_hostname(self) -> str:
         """Creates the pod hostname from its name."""
-        return f"{pod_name}.{self._name}-endpoints.{self._namespace}.svc.cluster.local"
+        return socket.getfqdn()
 
     @contextmanager
     def _redis_client(self, hostname="localhost") -> Redis:
