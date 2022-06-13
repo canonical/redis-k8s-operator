@@ -15,3 +15,8 @@ TLS_RESOURCES = {
     "key-file": "tests/tls/redis.key",
     "ca-cert-file": "tests/tls/ca.crt",
 }
+APPLICATION_DATA = {
+    "leader-host": "leader-host",
+    "redis-password": "password",
+}
+NUM_UNITS = 2
