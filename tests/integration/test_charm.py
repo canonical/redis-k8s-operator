@@ -10,11 +10,12 @@ from pytest_operator.plugin import OpsTest
 from redis import Redis
 from redis.exceptions import AuthenticationError
 
-from tests.helpers import APP_NAME, METADATA, TLS_RESOURCES
+from tests.helpers import APP_NAME, METADATA, NUM_UNITS, TLS_RESOURCES
 
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.skip_if_deployed
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test: OpsTest):
     """Build the charm-under-test and deploy it together with related charms.
@@ -29,7 +30,9 @@ async def test_build_and_deploy(ops_test: OpsTest):
         "key-file": METADATA["resources"]["key-file"]["filename"],
         "ca-cert-file": METADATA["resources"]["ca-cert-file"]["filename"],
     }
-    await ops_test.model.deploy(charm, resources=resources, application_name=APP_NAME)
+    await ops_test.model.deploy(
+        charm, resources=resources, application_name=APP_NAME, num_units=NUM_UNITS
+    )
 
     # issuing dummy update_status just to trigger an event
     await ops_test.model.set_config({"update-status-hook-interval": "10s"})
@@ -56,7 +59,6 @@ async def test_application_is_up(ops_test: OpsTest):
     address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/0"]["address"]
 
     # Use action to get admin password
-    logger.info("calling action to retrieve password")
     password = await get_password(ops_test)
     logger.info("retrieved password for %s: %s", APP_NAME, password)
 
@@ -65,7 +67,7 @@ async def test_application_is_up(ops_test: OpsTest):
     assert cli.ping()
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.password_tests
 async def test_database_with_no_password(ops_test: OpsTest):
     """Check that the database cannot be accessed without a password."""
     status = await ops_test.model.get_status()  # noqa: F821
@@ -77,7 +79,7 @@ async def test_database_with_no_password(ops_test: OpsTest):
         cli.ping()
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.password_tests
 async def test_same_password_after_scaling(ops_test: OpsTest):
     """Check that the password remains the same.
 
@@ -85,7 +87,6 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
     and that it works on the database.
     """
     # Use action to get admin password
-    logger.info("calling action to retrieve password")
     before_pw = await get_password(ops_test)
 
     logger.info("scaling charm %s to 0 units", APP_NAME)
@@ -105,7 +106,6 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
     )
 
     # Use action to get admin password after scaling
-    logger.info("calling action to retrieve password")
     after_pw = await get_password(ops_test)
 
     logger.info("before scaling password: %s - after scaling password: %s", before_pw, after_pw)
@@ -115,8 +115,22 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
     cli = Redis(address, password=after_pw)
     assert cli.ping()
 
+    # Reset the number of units to initial state
+    logger.info("scaling charm back to %s units", NUM_UNITS)
+    await ops_test.model.applications[APP_NAME].scale(scale=NUM_UNITS)
+    await ops_test.model.block_until(
+        lambda: len(ops_test.model.applications[APP_NAME].units) == NUM_UNITS
+    )
+    # Wait for model to settle
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status="active",
+        raise_on_blocked=False,
+        timeout=1000,
+    )
 
-@pytest.mark.abort_on_fail
+
+@pytest.mark.tls_tests
 async def test_blocked_if_no_certificates(ops_test: OpsTest):
     """Check the application status on TLS enable.
 
@@ -135,7 +149,7 @@ async def test_blocked_if_no_certificates(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", timeout=1000)
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.tls_tests
 async def test_enable_tls(ops_test: OpsTest):
     """Check adding TLS certificates and enabling them.
 
@@ -159,7 +173,6 @@ async def test_enable_tls(ops_test: OpsTest):
     )
 
     await change_config(ops_test, {"enable-tls": "true"})
-
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME], status="active", raise_on_blocked=False, timeout=1000
     )
@@ -168,8 +181,47 @@ async def test_enable_tls(ops_test: OpsTest):
     address = await get_address(ops_test)
 
     # connect using the ca certificate
-    cli = Redis(address, password=password, ssl=True, ssl_ca_certs=TLS_RESOURCES["ca-cert-file"])
-    assert cli.ping()
+    client = Redis(
+        address, password=password, ssl=True, ssl_ca_certs=TLS_RESOURCES["ca-cert-file"]
+    )
+    assert client.ping()
+    client.close()
+
+    await change_config(ops_test, {"enable-tls": "false"})
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME], status="active", raise_on_blocked=False, timeout=1000
+    )
+
+    client = Redis(address, password=password, ssl=False)
+    assert client.ping()
+    client.close()
+
+
+@pytest.mark.replication_tests
+async def test_replication(ops_test: OpsTest):
+    """Check that non leader units are replicas."""
+    unit_map = await get_unit_map(ops_test)
+    logger.info("Unit mapping: {}".format(unit_map))
+
+    leader_num = unit_map["leader"].split("/")[1]
+    leader_address = await get_address(ops_test, leader_num)
+    password = await get_password(ops_test, leader_num)
+
+    leader_client = Redis(leader_address, password=password)
+    leader_client.set("testKey", "myValue")
+
+    # Check that the initial key has been replicated across units
+    for unit_name in unit_map["non_leader"]:
+        unit_num = unit_name.split("/")[1]
+        address = await get_address(ops_test, unit_num)
+
+        client = Redis(address, password=password)
+        assert client.get("testKey") == b"myValue"
+        client.close()
+
+    # Reset database satus
+    leader_client.delete("testKey")
+    leader_client.close()
 
 
 ##################
@@ -209,3 +261,16 @@ async def get_address(ops_test: OpsTest, unit_num=0) -> str:
     status = await ops_test.model.get_status()  # noqa: F821
     address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/{unit_num}"]["address"]
     return address
+
+
+async def get_unit_map(ops_test: OpsTest) -> dict:
+    """Get a map of unit names."""
+    unit_map = {"leader": None, "non_leader": []}
+    for unit in ops_test.model.applications[APP_NAME].units:
+        if await unit.is_leader_from_status():
+            # Get the number from the unit
+            unit_map["leader"] = unit.name
+        else:
+            unit_map["non_leader"].append(unit.name)
+
+    return unit_map
