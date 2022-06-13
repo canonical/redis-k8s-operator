@@ -18,7 +18,9 @@
 
 import logging
 import secrets
+import socket
 import string
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional
 
@@ -28,16 +30,16 @@ from ops.framework import EventBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
 from ops.pebble import Layer
+from redis import Redis
 from redis.exceptions import RedisError
 
-from redis_client import redis_client
-
-REDIS_PORT = 6379
-WAITING_MESSAGE = "Waiting for Redis..."
-CONFIG_PATH = "/etc/redis/"
-PEER = "redis-peers"
-PEER_PASSWORD_KEY = "redis-password"
-
+from literals import (
+    LEADER_HOST_KEY,
+    PEER,
+    PEER_PASSWORD_KEY,
+    REDIS_PORT,
+    WAITING_MESSAGE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,9 @@ class RedisK8sCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
 
+        self._unit_name = self.unit.name
+        self._name = self.model.app.name
+        self._namespace = self.model.name
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
 
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
@@ -59,8 +64,9 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self._config_changed)
         self.framework.observe(self.on.upgrade_charm, self._upgrade_charm)
         self.framework.observe(self.on.update_status, self._update_status)
-        self.framework.observe(self.on.redis_peers_relation_changed, self._peer_relation_changed)
+
         self.framework.observe(self.on.redis_relation_created, self._on_redis_relation_created)
+        self.framework.observe(self.on.redis_peers_relation_changed, self._peer_relation_handler)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
         self.framework.observe(
@@ -74,6 +80,7 @@ class RedisK8sCharm(CharmBase):
 
         Updates the Pebble layer if needed.
         """
+        self._store_certificates()
         self._update_layer()
 
     def _upgrade_charm(self, _) -> None:
@@ -90,7 +97,13 @@ class RedisK8sCharm(CharmBase):
         If no password exists, a new one will be created for accessing Redis. This password
         will be stored on the peer relation databag.
         """
+        if self._current_master is None:
+            leader_hostname = self._get_pod_hostname()
+            logger.info("Initial replication, setting leader-host to {}".format(leader_hostname))
+            self._peers.data[self.app][LEADER_HOST_KEY] = leader_hostname
+
         if not self._get_password():
+            logger.info("Creating password for application")
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
     def _config_changed(self, event: EventBase) -> None:
@@ -122,11 +135,14 @@ class RedisK8sCharm(CharmBase):
         logger.info("Beginning update_status")
         self._redis_check()
 
-    def _peer_relation_changed(self, _):
-        """Handle peer_relation_changed."""
-        # NOTE: Updates on legacy `redis` relation only (DEPRECATE)
-        if self._peers.data[self.app].get("enable-password", "true") == "false":
-            self._update_layer()
+    def _peer_relation_handler(self, event):
+        """Handle relation for joining units."""
+        self._update_layer()
+
+        # update layer should leave the unit in active status
+        if self.unit.status != ActiveStatus():
+            event.defer()
+            return
 
     def _on_redis_relation_created(self, _):
         """Handle the relation created event."""
@@ -148,6 +164,10 @@ class RedisK8sCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
             return
 
+        if not self._valid_app_databag():
+            self.unit.status = WaitingStatus("Waiting for peer data to be updated")
+            return
+
         # Get current config
         current_layer = container.get_plan()
 
@@ -157,7 +177,6 @@ class RedisK8sCharm(CharmBase):
         # NOTE: This block is to allow the legacy `redis` relation interface to work
         # with charms still using it. Charms using the relation don't expect Redis to
         # have a password.
-        new_layer = self._redis_layer()
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             logger.warning(
                 "DEPRECATION WARNING - password off, this will be removed on later versions"
@@ -205,7 +224,7 @@ class RedisK8sCharm(CharmBase):
         """Generate the REDIS_EXTRA_FLAGS environment variable for the container.
 
         Will check config options to decide the extra commands passed at the
-        redis-server service. Currently only TLS is an option.
+        redis-server service.
         """
         extra_flags = []
         if self.config["enable-tls"]:
@@ -217,18 +236,28 @@ class RedisK8sCharm(CharmBase):
                 f"--tls-key-file {self._storage_path}/redis.key",
                 f"--tls-ca-cert-file {self._storage_path}/ca.crt",
             ]
+
+        # Non leader units will be replicas of the leader unit
+        if not self.unit.is_leader():
+            extra_flags += [f"--replicaof {self._current_master} {REDIS_PORT}"]
+
+            if self.config["enable-tls"]:
+                extra_flags += ["--tls-replication yes"]
+
+            # NOTE: (DEPRECATE) This check will evaluate to false in the case the `redis`
+            # relation interface is being used.
+            if self._peers.data[self.app].get("enable-password", "true") == "true":
+                extra_flags += [f"--masterauth {self._get_password()}"]
+
+        logger.debug("Extra flags: {}".format(extra_flags))
+
         return " ".join(extra_flags)
 
     def _redis_check(self) -> None:
-        """Checks is the Redis database is active."""
+        """Checks if the Redis database is active."""
         try:
-            redis = redis_client(
-                self._peers.data[self.app].get("enable-password", "true"),
-                self._get_password(),
-                self.config["enable-tls"],
-                self._storage_path,
-            )
-            info = redis.info("server")
+            with self._redis_client() as redis:
+                info = redis.info("server")
             version = info["redis_version"]
             self.unit.status = ActiveStatus()
             self.unit.set_workload_version(version)
@@ -281,6 +310,26 @@ class RedisK8sCharm(CharmBase):
         resources = ["cert-file", "key-file", "ca-cert-file"]
         return [self._retrieve_resource(res) for res in resources]
 
+    @property
+    def _current_master(self) -> Optional[str]:
+        """Get the current master."""
+        return self._peers.data[self.app].get(LEADER_HOST_KEY)
+
+    def _valid_app_databag(self) -> bool:
+        """Check if the peer databag has been populated.
+
+        Returns:
+            bool: True if the databag has been populated, false otherwise
+        """
+        password = self._get_password()
+
+        # NOTE: (DEPRECATE) Only used for the redis legacy relation. The password
+        # is not relevant when that relation is used
+        if self._peers.data[self.app].get("enable-password", "true") == "false":
+            password = True
+
+        return bool(password and self._current_master)
+
     def _generate_password(self) -> str:
         """Generate a random 16 character password string.
 
@@ -291,14 +340,18 @@ class RedisK8sCharm(CharmBase):
         password = "".join([secrets.choice(choices) for i in range(16)])
         return password
 
-    def _get_password(self) -> str:
+    def _get_password(self) -> Optional[str]:
         """Get the current admin password for Redis.
 
         Returns:
             String with the password
         """
         data = self._peers.data[self.app]
-        return data.get(PEER_PASSWORD_KEY, "")
+        # NOTE: (DEPRECATE) When using redis legacy relation, no password is used
+        if data.get("enable-password", "true") == "false":
+            return None
+
+        return data.get(PEER_PASSWORD_KEY)
 
     def _store_certificates(self) -> None:
         """Copy the TLS certificates to the redis container."""
@@ -307,6 +360,7 @@ class RedisK8sCharm(CharmBase):
         container = self.unit.get_container("redis")
 
         # Copy the files from the resources location to the redis container.
+        # TODO handle error case
         for cert_path in cert_paths:
             with open(cert_path, "r") as f:
                 container.push((f"{self._storage_path}/{cert_path.name}"), f)
@@ -321,8 +375,34 @@ class RedisK8sCharm(CharmBase):
             # Fetch the resource path
             return self.model.resources.fetch(resource)
         except (ModelError, NameError) as e:
-            logger.error(e)
+            logger.warning(e)
             return None
+
+    def _get_pod_hostname(self, name="") -> str:
+        """Creates the pod hostname from its name."""
+        return socket.getfqdn(name)
+
+    @contextmanager
+    def _redis_client(self, hostname="localhost") -> Redis:
+        """Creates a Redis client on a given hostname.
+
+        All parameters are passed, will default to the same values under `Redis` constructor
+
+        Returns:
+            Redis: redis client
+        """
+        ca_cert_path = self._retrieve_resource("ca-cert-file")
+        client = Redis(
+            host=hostname,
+            port=REDIS_PORT,
+            password=self._get_password(),
+            ssl=self.config["enable-tls"],
+            ssl_ca_certs=ca_cert_path,
+        )
+        try:
+            yield client
+        finally:
+            client.close()
 
 
 if __name__ == "__main__":  # pragma: nocover

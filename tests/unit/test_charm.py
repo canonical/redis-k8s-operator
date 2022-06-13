@@ -29,6 +29,7 @@ from redis import Redis
 from redis.exceptions import RedisError
 
 from charm import RedisK8sCharm
+from tests.helpers import APPLICATION_DATA
 
 
 class TestCharm(TestCase):
@@ -302,3 +303,35 @@ class TestCharm(TestCase):
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
+
+    def test_non_leader_unit_as_replica(self):
+        rel = self.harness.charm.model.get_relation(self._peer_relation)
+        # Trigger peer_relation_joined/changed
+        self.harness.add_relation_unit(rel.id, "redis-k8s/1")
+        # Simulate an update to the application databag made by the leader unit
+        self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
+
+        leader_hostname = APPLICATION_DATA["leader-host"]
+        redis_port = 6379
+        extra_flags = [
+            f"--replicaof {leader_hostname} {redis_port}",
+            f"--masterauth {self.harness.charm._get_password()}",
+        ]
+        expected_plan = {
+            "services": {
+                "redis": {
+                    "override": "replace",
+                    "summary": "Redis service",
+                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_EXTRA_FLAGS": " ".join(extra_flags),
+                    },
+                }
+            },
+        }
+        found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
+
+        self.assertEqual(expected_plan, found_plan)
+        self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
