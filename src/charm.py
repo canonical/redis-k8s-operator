@@ -378,9 +378,9 @@ class RedisK8sCharm(CharmBase):
             logger.warning(e)
             return None
 
-    def _get_pod_hostname(self) -> str:
+    def _get_pod_hostname(self, name="") -> str:
         """Creates the pod hostname from its name."""
-        return socket.getfqdn()
+        return socket.getfqdn(name)
 
     @contextmanager
     def _redis_client(self, hostname="localhost") -> Redis:
