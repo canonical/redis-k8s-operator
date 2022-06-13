@@ -228,10 +228,14 @@ async def test_replication(ops_test: OpsTest):
         apps=[APP_NAME], status="active", raise_on_blocked=False, timeout=1000
     )
 
+    client = Redis(address, password=password, ssl=False)
+    assert client.ping()
+    client.close()
+
 
 @pytest.mark.replication_tests
 async def test_replication(ops_test: OpsTest):
-    """Scale up application and check that non leader units are replicas."""
+    """Check that non leader units are replicas."""
     unit_map = await get_unit_map(ops_test)
     logger.info("Unit mapping: {}".format(unit_map))
 
@@ -254,36 +258,6 @@ async def test_replication(ops_test: OpsTest):
     # Reset database satus
     leader_client.delete("testKey")
     leader_client.close()
-
-
-@pytest.mark.replication_tests
-async def test_disable_replication(ops_test: OpsTest):
-    """Test disabling replication so all units are masters."""
-    unit_map = await get_unit_map(ops_test)
-
-    # Disable replication
-    await change_config(ops_test, {"enable-replication": "false"})
-    await ops_test.model.wait_for_idle(
-        apps=[APP_NAME], status="active", raise_on_blocked=False, timeout=1000
-    )
-
-    leader_num = unit_map["leader"].split("/")[1]
-    password = await get_password(ops_test, leader_num)
-
-    # Check that all units are masters
-    for unit_name in unit_map["non_leader"]:
-        unit_num = unit_name.split("/")[1]
-        address = await get_address(ops_test, unit_num)
-
-        client = Redis(address, password=password)
-        assert client.execute_command("ROLE")[0] == b"master"
-        client.close()
-
-    # Enable replication
-    await change_config(ops_test, {"enable-replication": "true"})
-    await ops_test.model.wait_for_idle(
-        apps=[APP_NAME], status="active", raise_on_blocked=False, timeout=1000
-    )
 
 
 ##################
