@@ -237,7 +237,7 @@ class RedisK8sCharm(CharmBase):
             ]
 
         # Non leader units will be replicas of the leader unit
-        if self.config["enable-replication"] and not self.unit.is_leader():
+        if not self.unit.is_leader():
             extra_flags += [f"--replicaof {self._current_master} {REDIS_PORT}"]
 
             if self.config["enable-tls"]:
