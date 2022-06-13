@@ -260,6 +260,20 @@ async def test_replication(ops_test: OpsTest):
     leader_client.close()
 
 
+@pytest.mark.replication_tests
+async def test_sentinels_expected(ops_test: OpsTest):
+    """Test sentinel connection and expected number of sentinels."""
+    # TODO extract number getter to a funct?
+    unit_map = await get_unit_map(ops_test)
+    leader_num = unit_map["leader"].split("/")[1]
+    address = await get_address(ops_test, leader_num)
+
+    sentinel = Redis(address, port=26379)
+    sentinels_connected = sentinel.info("sentinel")["master0"]["sentinels"]
+
+    assert sentinels_connected == NUM_UNITS
+
+
 ##################
 # Helper methods #
 ##################
@@ -300,7 +314,14 @@ async def get_address(ops_test: OpsTest, unit_num=0) -> str:
 
 
 async def get_unit_map(ops_test: OpsTest) -> dict:
-    """Get a map of unit names."""
+    """Get a map of unit names.
+
+    Returns:
+        unit_map : {
+            "leader": "redis-k8s/0",
+            "non_leader": ["redis-k8s/1", "redis-k8s/1"]
+        }
+    """
     unit_map = {"leader": None, "non_leader": []}
     for unit in ops_test.model.applications[APP_NAME].units:
         if await unit.is_leader_from_status():

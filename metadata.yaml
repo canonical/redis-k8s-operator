@@ -49,6 +49,8 @@ containers:
     mounts:
       - storage: database
         location: /var/lib/redis
+  sentinel:
+    resource: redis-image
 
 resources:
   redis-image:
