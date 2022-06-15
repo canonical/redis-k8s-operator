@@ -1,6 +1,6 @@
-# This file is part of the Redis k8s Charm for Juju.
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
+
 name: redis-k8s
 display-name: Redis
 docs: https://discourse.charmhub.io/t/redis-docs-index/4571

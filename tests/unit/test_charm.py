@@ -1,4 +1,4 @@
-# This file is part of the Redis k8s Charm for Juju.
+#!/usr/bin/env python3
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
