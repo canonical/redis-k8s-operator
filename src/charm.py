@@ -40,6 +40,7 @@ from literals import (
     REDIS_PORT,
     WAITING_MESSAGE,
 )
+from sentinel import Sentinel
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ class RedisK8sCharm(CharmBase):
         self._name = self.model.app.name
         self._namespace = self.model.name
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
+        self.sentinel = Sentinel(self)
 
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._leader_elected)
