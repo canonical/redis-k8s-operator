@@ -203,7 +203,7 @@ async def test_replication(ops_test: OpsTest):
     unit_map = await get_unit_map(ops_test)
     logger.info("Unit mapping: {}".format(unit_map))
 
-    leader_num = unit_map["leader"].split("/")[1]
+    leader_num = get_unit_number(unit_map["leader"])
     leader_address = await get_address(ops_test, leader_num)
     password = await get_password(ops_test, leader_num)
 
@@ -212,7 +212,7 @@ async def test_replication(ops_test: OpsTest):
 
     # Check that the initial key has been replicated across units
     for unit_name in unit_map["non_leader"]:
-        unit_num = unit_name.split("/")[1]
+        unit_num = get_unit_number(unit_name)
         address = await get_address(ops_test, unit_num)
 
         client = Redis(address, password=password)
@@ -229,7 +229,7 @@ async def test_sentinels_expected(ops_test: OpsTest):
     """Test sentinel connection and expected number of sentinels."""
     # TODO extract number getter to a funct?
     unit_map = await get_unit_map(ops_test)
-    leader_num = unit_map["leader"].split("/")[1]
+    leader_num = get_unit_number(unit_map["leader"])
     address = await get_address(ops_test, leader_num)
 
     sentinel = Redis(address, port=26379)
@@ -295,3 +295,10 @@ async def get_unit_map(ops_test: OpsTest) -> dict:
             unit_map["non_leader"].append(unit.name)
 
     return unit_map
+
+def get_unit_number(unit_name: str) -> str:
+    """Get the unit number from it's complete name.
+    
+    Unit names look like `application-name/0`
+    """
+    return unit_name.split("/")[1]
