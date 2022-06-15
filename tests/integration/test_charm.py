@@ -227,7 +227,6 @@ async def test_replication(ops_test: OpsTest):
 @pytest.mark.replication_tests
 async def test_sentinels_expected(ops_test: OpsTest):
     """Test sentinel connection and expected number of sentinels."""
-    # TODO extract number getter to a funct?
     unit_map = await get_unit_map(ops_test)
     leader_num = get_unit_number(unit_map["leader"])
     address = await get_address(ops_test, leader_num)
@@ -296,9 +295,10 @@ async def get_unit_map(ops_test: OpsTest) -> dict:
 
     return unit_map
 
+
 def get_unit_number(unit_name: str) -> str:
     """Get the unit number from it's complete name.
-    
+
     Unit names look like `application-name/0`
     """
     return unit_name.split("/")[1]
