@@ -203,7 +203,7 @@ async def test_replication(ops_test: OpsTest):
     unit_map = await get_unit_map(ops_test)
     logger.info("Unit mapping: {}".format(unit_map))
 
-    leader_num = unit_map["leader"].split("/")[1]
+    leader_num = get_unit_number(unit_map["leader"])
     leader_address = await get_address(ops_test, leader_num)
     password = await get_password(ops_test, leader_num)
 
@@ -212,7 +212,7 @@ async def test_replication(ops_test: OpsTest):
 
     # Check that the initial key has been replicated across units
     for unit_name in unit_map["non_leader"]:
-        unit_num = unit_name.split("/")[1]
+        unit_num = get_unit_number(unit_name)
         address = await get_address(ops_test, unit_num)
 
         client = Redis(address, password=password)
@@ -222,6 +222,19 @@ async def test_replication(ops_test: OpsTest):
     # Reset database satus
     leader_client.delete("testKey")
     leader_client.close()
+
+
+@pytest.mark.replication_tests
+async def test_sentinels_expected(ops_test: OpsTest):
+    """Test sentinel connection and expected number of sentinels."""
+    unit_map = await get_unit_map(ops_test)
+    leader_num = get_unit_number(unit_map["leader"])
+    address = await get_address(ops_test, leader_num)
+
+    sentinel = Redis(address, port=26379)
+    sentinels_connected = sentinel.info("sentinel")["master0"]["sentinels"]
+
+    assert sentinels_connected == NUM_UNITS
 
 
 ##################
@@ -264,7 +277,14 @@ async def get_address(ops_test: OpsTest, unit_num=0) -> str:
 
 
 async def get_unit_map(ops_test: OpsTest) -> dict:
-    """Get a map of unit names."""
+    """Get a map of unit names.
+
+    Returns:
+        unit_map : {
+            "leader": "redis-k8s/0",
+            "non_leader": ["redis-k8s/1", "redis-k8s/1"]
+        }
+    """
     unit_map = {"leader": None, "non_leader": []}
     for unit in ops_test.model.applications[APP_NAME].units:
         if await unit.is_leader_from_status():
@@ -274,3 +294,11 @@ async def get_unit_map(ops_test: OpsTest) -> dict:
             unit_map["non_leader"].append(unit.name)
 
     return unit_map
+
+
+def get_unit_number(unit_name: str) -> str:
+    """Get the unit number from it's complete name.
+
+    Unit names look like `application-name/0`
+    """
+    return unit_name.split("/")[1]

@@ -1,0 +1,7 @@
+port {{ sentinel_port }}
+sentinel monitor mymaster {{ redis_master }} {{ redis_port }} {{ quorum }}
+sentinel down-after-milliseconds mymaster 60000
+sentinel failover-timeout mymaster 180000
+sentinel parallel-syncs mymaster 1
+
+sentinel auth-pass mymaster {{ master_password }}
