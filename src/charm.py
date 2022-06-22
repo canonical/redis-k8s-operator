@@ -210,9 +210,6 @@ class RedisK8sCharm(CharmBase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
-                    "environment": {
-                        "ALLOW_EMPTY_PASSWORD": "yes",
-                    }
                 }
             },
         }
