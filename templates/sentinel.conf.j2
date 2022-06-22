@@ -1,7 +1,10 @@
 port {{ sentinel_port }}
-sentinel monitor mymaster {{ redis_master }} {{ redis_port }} {{ quorum }}
-sentinel down-after-milliseconds mymaster 60000
-sentinel failover-timeout mymaster 180000
-sentinel parallel-syncs mymaster 1
+sentinel monitor {{ master_name }} {{ redis_master }} {{ redis_port }} {{ quorum }}
+sentinel down-after-milliseconds {{ master_name }} 30000
+sentinel failover-timeout {{ master_name }} 180000
+sentinel parallel-syncs {{ master_name }} 1
 
-sentinel auth-pass mymaster {{ master_password }}
+sentinel auth-pass {{ master_name }} {{ master_password }}
+sentinel announce-ip {{ hostname }}
+
+requirepass {{ sentinel_password }}
