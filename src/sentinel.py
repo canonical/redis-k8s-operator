@@ -90,7 +90,7 @@ class Sentinel(Object):
                 "sentinel": {
                     "override": "replace",
                     "summary": "Sentinel service",
-                    "command": f"/usr/bin/redis-server {SENTINEL_CONFIG_PATH} --sentinel",
+                    "command": f"redis-server {SENTINEL_CONFIG_PATH} --sentinel",
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
@@ -130,6 +130,7 @@ class Sentinel(Object):
         container.push(
             path,
             rendered,
+            make_dirs=True,
             permissions=0o600,
             user="redis",
             group="redis",

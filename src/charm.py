@@ -25,7 +25,6 @@ from literals import (
     LEADER_HOST_KEY,
     PEER,
     PEER_PASSWORD_KEY,
-    REDIS_CONFIG_PATH,
     REDIS_PORT,
     SENTINEL_PASSWORD_KEY,
     WAITING_MESSAGE,
@@ -171,18 +170,6 @@ class RedisK8sCharm(CharmBase):
         # Create the new config layer
         new_layer = self._redis_layer()
 
-        # NOTE: This block is to allow the legacy `redis` relation interface to work
-        # with charms still using it. Charms using the relation don't expect Redis to
-        # have a password.
-        if self._peers.data[self.app].get("enable-password", "true") == "false":
-            logger.warning(
-                "DEPRECATION WARNING - password off, this will be removed on later versions"
-            )
-            env = new_layer.services["redis"].environment
-            env["ALLOW_EMPTY_PASSWORD"] = "yes"
-            if "REDIS_PASSWORD" in env:
-                del env["REDIS_PASSWORD"]
-
         # Update the Pebble configuration Layer
         if current_layer.services != new_layer.services:
             logger.debug("About to add_layer with layer_config:\n{}".format(new_layer))
@@ -206,7 +193,7 @@ class RedisK8sCharm(CharmBase):
                 "redis": {
                     "override": "replace",
                     "summary": "Redis service",
-                    "command": f"redis-server {REDIS_CONFIG_PATH} {self._redis_extra_flags()}",
+                    "command": f"redis-server {self._redis_extra_flags()}",
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
@@ -222,6 +209,12 @@ class RedisK8sCharm(CharmBase):
         redis-server service.
         """
         extra_flags = [f"--requirepass {self._get_password()}", "--bind 0.0.0.0"]
+
+        if self._peers.data[self.app].get("enable-password", "true") == "false":
+            logger.warning(
+                "DEPRECATION WARNING - password off, this will be removed on later versions"
+            )
+            extra_flags = ["--bind 0.0.0.0"]
 
         if self.config["enable-tls"]:
             extra_flags += [
@@ -379,6 +372,7 @@ class RedisK8sCharm(CharmBase):
                 container.push(
                     (f"{self._storage_path}/{cert_path.name}"),
                     f,
+                    make_dirs=True,
                     permissions=0o600,
                     user="redis",
                     group="redis",

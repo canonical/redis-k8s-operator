@@ -4,7 +4,12 @@ sentinel down-after-milliseconds {{ master_name }} 30000
 sentinel failover-timeout {{ master_name }} 180000
 sentinel parallel-syncs {{ master_name }} 1
 
+{% if master_password != None %}
 sentinel auth-pass {{ master_name }} {{ master_password }}
-sentinel announce-ip {{ hostname }}
-
+{% endif %}
 requirepass {{ sentinel_password }}
+
+sentinel announce-hostnames yes
+sentinel resolve-hostnames yes
+sentinel announce-ip {{ hostname }}
+replica-announce-ip {{ hostname }}
