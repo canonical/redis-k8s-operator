@@ -79,6 +79,7 @@ async def test_database_with_no_password(ops_test: OpsTest):
         cli.ping()
 
 
+@pytest.mark.skip  # Skip until scale up/down operations are correctly handled
 @pytest.mark.password_tests
 async def test_same_password_after_scaling(ops_test: OpsTest):
     """Check that the password remains the same.
