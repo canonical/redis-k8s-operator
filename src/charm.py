@@ -26,6 +26,7 @@ from literals import (
     PEER,
     PEER_PASSWORD_KEY,
     REDIS_PORT,
+    SENTINEL_PASSWORD_KEY,
     WAITING_MESSAGE,
 )
 from sentinel import Sentinel
@@ -62,6 +63,9 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(
             self.on.get_initial_admin_password_action, self._get_password_action
         )
+        self.framework.observe(
+            self.on.get_sentinel_password_action, self._get_sentinel_password_action
+        )
 
         self._storage_path = self.meta.storages["database"].location
 
@@ -87,14 +91,19 @@ class RedisK8sCharm(CharmBase):
         If no password exists, a new one will be created for accessing Redis. This password
         will be stored on the peer relation databag.
         """
-        if self._current_master is None:
-            leader_hostname = self._get_pod_hostname()
-            logger.info("Initial replication, setting leader-host to {}".format(leader_hostname))
-            self._peers.data[self.app][LEADER_HOST_KEY] = leader_hostname
+        if self.current_master is None:
+            logger.info(
+                "Initial replication, setting leader-host to {}".format(self.unit_pod_hostname)
+            )
+            self._peers.data[self.app][LEADER_HOST_KEY] = self.unit_pod_hostname
 
         if not self._get_password():
             logger.info("Creating password for application")
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
+
+        if not self.get_sentinel_password():
+            logger.info("Creating sentinel password")
+            self._peers.data[self.app][SENTINEL_PASSWORD_KEY] = self._generate_password()
 
     def _config_changed(self, event: EventBase) -> None:
         """Handle config_changed event.
@@ -164,18 +173,6 @@ class RedisK8sCharm(CharmBase):
         # Create the new config layer
         new_layer = self._redis_layer()
 
-        # NOTE: This block is to allow the legacy `redis` relation interface to work
-        # with charms still using it. Charms using the relation don't expect Redis to
-        # have a password.
-        if self._peers.data[self.app].get("enable-password", "true") == "false":
-            logger.warning(
-                "DEPRECATION WARNING - password off, this will be removed on later versions"
-            )
-            env = new_layer.services["redis"].environment
-            env["ALLOW_EMPTY_PASSWORD"] = "yes"
-            if "REDIS_PASSWORD" in env:
-                del env["REDIS_PASSWORD"]
-
         # Update the Pebble configuration Layer
         if current_layer.services != new_layer.services:
             logger.debug("About to add_layer with layer_config:\n{}".format(new_layer))
@@ -199,12 +196,10 @@ class RedisK8sCharm(CharmBase):
                 "redis": {
                     "override": "replace",
                     "summary": "Redis service",
-                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "command": f"redis-server {self._redis_extra_flags()}",
+                    "user": "redis",
+                    "group": "redis",
                     "startup": "enabled",
-                    "environment": {
-                        "REDIS_PASSWORD": self._get_password(),
-                        "REDIS_EXTRA_FLAGS": self._redis_extra_flags(),
-                    },
                 }
             },
         }
@@ -216,7 +211,14 @@ class RedisK8sCharm(CharmBase):
         Will check config options to decide the extra commands passed at the
         redis-server service.
         """
-        extra_flags = []
+        extra_flags = [f"--requirepass {self._get_password()}", "--bind 0.0.0.0"]
+
+        if self._peers.data[self.app].get("enable-password", "true") == "false":
+            logger.warning(
+                "DEPRECATION WARNING - password off, this will be removed on later versions"
+            )
+            extra_flags = ["--bind 0.0.0.0"]
+
         if self.config["enable-tls"]:
             extra_flags += [
                 f"--tls-port {REDIS_PORT}",
@@ -227,9 +229,12 @@ class RedisK8sCharm(CharmBase):
                 f"--tls-ca-cert-file {self._storage_path}/ca.crt",
             ]
 
-        # Non leader units will be replicas of the leader unit
-        if not self.unit.is_leader():
-            extra_flags += [f"--replicaof {self._current_master} {REDIS_PORT}"]
+        # Check that current unit is master
+        if self.current_master != self.unit_pod_hostname:
+            extra_flags += [
+                f"--replicaof {self.current_master} {REDIS_PORT}",
+                f"--replica-announce-ip {self.unit_pod_hostname}",
+            ]
 
             if self.config["enable-tls"]:
                 extra_flags += ["--tls-replication yes"]
@@ -281,6 +286,13 @@ class RedisK8sCharm(CharmBase):
         """
         event.set_results({"redis-password": self._get_password()})
 
+    def _get_sentinel_password_action(self, event: ActionEvent) -> None:
+        """Handle the get_sentinel_password event.
+
+        Sets the result of the action with the password for Sentinel.
+        """
+        event.set_results({"sentinel-password": self.get_sentinel_password()})
+
     @property
     def _peers(self) -> Optional[Relation]:
         """Fetch the peer relation.
@@ -301,7 +313,12 @@ class RedisK8sCharm(CharmBase):
         return [self._retrieve_resource(res) for res in resources]
 
     @property
-    def _current_master(self) -> Optional[str]:
+    def unit_pod_hostname(self, name="") -> str:
+        """Creates the pod hostname from its name."""
+        return socket.getfqdn(name)
+
+    @property
+    def current_master(self) -> Optional[str]:
         """Get the current master."""
         return self._peers.data[self.app].get(LEADER_HOST_KEY)
 
@@ -318,7 +335,7 @@ class RedisK8sCharm(CharmBase):
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             password = True
 
-        return bool(password and self._current_master)
+        return bool(password and self.current_master)
 
     def _generate_password(self) -> str:
         """Generate a random 16 character password string.
@@ -343,6 +360,15 @@ class RedisK8sCharm(CharmBase):
 
         return data.get(PEER_PASSWORD_KEY)
 
+    def get_sentinel_password(self) -> Optional[str]:
+        """Get the current password for sentinel.
+
+        Returns:
+            String with the password
+        """
+        data = self._peers.data[self.app]
+        return data.get(SENTINEL_PASSWORD_KEY)
+
     def _store_certificates(self) -> None:
         """Copy the TLS certificates to the redis container."""
         # Get a list of valid paths
@@ -353,7 +379,14 @@ class RedisK8sCharm(CharmBase):
         # TODO handle error case
         for cert_path in cert_paths:
             with open(cert_path, "r") as f:
-                container.push((f"{self._storage_path}/{cert_path.name}"), f)
+                container.push(
+                    (f"{self._storage_path}/{cert_path.name}"),
+                    f,
+                    make_dirs=True,
+                    permissions=0o600,
+                    user="redis",
+                    group="redis",
+                )
 
     def _retrieve_resource(self, resource: str) -> Optional[Path]:
         """Check that the resource exists and return it.
@@ -367,10 +400,6 @@ class RedisK8sCharm(CharmBase):
         except (ModelError, NameError) as e:
             logger.warning(e)
             return None
-
-    def _get_pod_hostname(self, name="") -> str:
-        """Creates the pod hostname from its name."""
-        return socket.getfqdn(name)
 
     @contextmanager
     def _redis_client(self, hostname="localhost") -> Redis:

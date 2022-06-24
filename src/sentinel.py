@@ -90,7 +90,9 @@ class Sentinel(Object):
                 "sentinel": {
                     "override": "replace",
                     "summary": "Sentinel service",
-                    "command": f"/usr/bin/redis-server {SENTINEL_CONFIG_PATH} --sentinel",
+                    "command": f"redis-server {SENTINEL_CONFIG_PATH} --sentinel",
+                    "user": "redis",
+                    "group": "redis",
                     "startup": "enabled",
                 }
             },
@@ -104,11 +106,14 @@ class Sentinel(Object):
             template = Template(file.read())
         # render the template file with the correct values.
         rendered = template.render(
+            hostname=self.charm.unit_pod_hostname,
+            master_name=self.charm._name,
             sentinel_port=SENTINEL_PORT,
-            redis_master=self.charm._current_master,
+            redis_master=self.charm.current_master,
             redis_port=REDIS_PORT,
             quorum=1,
             master_password=self.charm._get_password(),
+            sentinel_password=self.charm.get_sentinel_password(),
         )
         self._copy_file(SENTINEL_CONFIG_PATH, rendered, "sentinel")
 
@@ -122,4 +127,11 @@ class Sentinel(Object):
             logger.warning("Can't connect to {} container".format(container))
             return
 
-        container.push(path, rendered)
+        container.push(
+            path,
+            rendered,
+            make_dirs=True,
+            permissions=0o600,
+            user="redis",
+            group="redis",
+        )

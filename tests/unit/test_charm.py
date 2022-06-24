@@ -76,17 +76,19 @@ class TestCharm(TestCase):
         info.return_value = {"redis_version": "6.0.11"}
         self.harness.update_config()
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
+        extra_flags = [
+            f"--requirepass {self.harness.charm._get_password()}",
+            "--bind 0.0.0.0",
+        ]
         expected_plan = {
             "services": {
                 "redis": {
                     "override": "replace",
                     "summary": "Redis service",
-                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "command": f"redis-server {' '.join(extra_flags)}",
+                    "user": "redis",
+                    "group": "redis",
                     "startup": "enabled",
-                    "environment": {
-                        "REDIS_PASSWORD": self.harness.charm._get_password(),
-                        "REDIS_EXTRA_FLAGS": "",
-                    },
                 }
             },
         }
@@ -104,17 +106,19 @@ class TestCharm(TestCase):
         info.side_effect = RedisError("Error connecting to redis")
         self.harness.update_config()
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
+        extra_flags = [
+            f"--requirepass {self.harness.charm._get_password()}",
+            "--bind 0.0.0.0",
+        ]
         expected_plan = {
             "services": {
                 "redis": {
                     "override": "replace",
                     "summary": "Redis service",
-                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "command": f"redis-server {' '.join(extra_flags)}",
+                    "user": "redis",
+                    "group": "redis",
                     "startup": "enabled",
-                    "environment": {
-                        "REDIS_PASSWORD": self.harness.charm._get_password(),
-                        "REDIS_EXTRA_FLAGS": "",
-                    },
                 }
             },
         }
@@ -208,17 +212,16 @@ class TestCharm(TestCase):
 
         # Check that the resulting plan does not have a password
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
+        extra_flags = ["--bind 0.0.0.0"]
         expected_plan = {
             "services": {
                 "redis": {
                     "override": "replace",
                     "summary": "Redis service",
-                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "command": f"redis-server {' '.join(extra_flags)}",
+                    "user": "redis",
+                    "group": "redis",
                     "startup": "enabled",
-                    "environment": {
-                        "ALLOW_EMPTY_PASSWORD": "yes",
-                        "REDIS_EXTRA_FLAGS": "",
-                    },
                 }
             },
         }
@@ -263,6 +266,8 @@ class TestCharm(TestCase):
 
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
+            f"--requirepass {self.harness.charm._get_password()}",
+            "--bind 0.0.0.0",
             "--tls-port 6379",
             "--port 0",
             "--tls-auth-clients optional",
@@ -275,12 +280,10 @@ class TestCharm(TestCase):
                 "redis": {
                     "override": "replace",
                     "summary": "Redis service",
-                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "command": f"redis-server {' '.join(extra_flags)}",
+                    "user": "redis",
+                    "group": "redis",
                     "startup": "enabled",
-                    "environment": {
-                        "REDIS_PASSWORD": self.harness.charm._get_password(),
-                        "REDIS_EXTRA_FLAGS": " ".join(extra_flags),
-                    },
                 }
             },
         }
@@ -303,7 +306,10 @@ class TestCharm(TestCase):
         leader_hostname = APPLICATION_DATA["leader-host"]
         redis_port = 6379
         extra_flags = [
+            f"--requirepass {self.harness.charm._get_password()}",
+            "--bind 0.0.0.0",
             f"--replicaof {leader_hostname} {redis_port}",
+            f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             f"--masterauth {self.harness.charm._get_password()}",
         ]
         expected_plan = {
@@ -311,12 +317,10 @@ class TestCharm(TestCase):
                 "redis": {
                     "override": "replace",
                     "summary": "Redis service",
-                    "command": "/usr/local/bin/start-redis.sh redis-server",
+                    "command": f"redis-server {' '.join(extra_flags)}",
+                    "user": "redis",
+                    "group": "redis",
                     "startup": "enabled",
-                    "environment": {
-                        "REDIS_PASSWORD": self.harness.charm._get_password(),
-                        "REDIS_EXTRA_FLAGS": " ".join(extra_flags),
-                    },
                 }
             },
         }
