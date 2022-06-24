@@ -63,6 +63,9 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(
             self.on.get_initial_admin_password_action, self._get_password_action
         )
+        self.framework.observe(
+            self.on.get_sentinel_password_action, self._get_sentinel_password_action
+        )
 
         self._storage_path = self.meta.storages["database"].location
 
@@ -282,6 +285,13 @@ class RedisK8sCharm(CharmBase):
         Sets the result of the action with the admin password for Redis.
         """
         event.set_results({"redis-password": self._get_password()})
+
+    def _get_sentinel_password_action(self, event: ActionEvent) -> None:
+        """Handle the get_sentinel_password event.
+
+        Sets the result of the action with the password for Sentinel.
+        """
+        event.set_results({"sentinel-password": self.get_sentinel_password()})
 
     @property
     def _peers(self) -> Optional[Relation]:
