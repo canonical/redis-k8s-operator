@@ -9,13 +9,17 @@ Sentinel provides high availability for Redis.
 """
 
 import logging
+from contextlib import contextmanager
+from math import floor
+from typing import Optional
 
 from jinja2 import Template
 from ops.framework import Object
 from ops.model import ActiveStatus, WaitingStatus
 from ops.pebble import Layer
+from redis import ConnectionError, Redis, RedisError, TimeoutError
 
-from literals import REDIS_PORT, SENTINEL_CONFIG_PATH, SENTINEL_PORT
+from literals import REDIS_PORT, SENTINEL_CONFIG_PATH, SENTINEL_PORT, SOCKET_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -61,21 +65,12 @@ class Sentinel(Object):
         # copy sentinel config file to the container
         self._render_sentinel_config_file()
 
-        # Get current config
-        current_layer = container.get_plan()
-
         # Create the new config layer
         new_layer = self._sentinel_layer()
 
         # Update the Pebble configuration Layer
-        if current_layer.services != new_layer.services:
-            logger.debug("About to add_layer with layer_config:\n{}".format(new_layer))
-            container.add_layer("sentinel", new_layer, combine=True)
-            logger.info("Added updated layer 'sentinel' to Pebble plan")
-            container.restart("sentinel")
-            logger.info("Restarted sentinel service")
-
-        self.charm.unit.status = ActiveStatus()
+        container.add_layer("sentinel", new_layer, combine=True)
+        container.replan()
 
     def _sentinel_layer(self) -> Layer:
         """Create the Pebble configuration layer for Redis Sentinel.
@@ -111,7 +106,7 @@ class Sentinel(Object):
             sentinel_port=SENTINEL_PORT,
             redis_master=self.charm.current_master,
             redis_port=REDIS_PORT,
-            quorum=1,
+            quorum=self.expected_quorum,
             master_password=self.charm._get_password(),
             sentinel_password=self.charm.get_sentinel_password(),
         )
@@ -135,3 +130,59 @@ class Sentinel(Object):
             user="redis",
             group="redis",
         )
+
+    def get_master_info(self, host="localhost") -> Optional[dict]:
+        """Connect to sentinel and return the current master."""
+        master_info = None
+
+        with self.sentinel_client(host) as sentinel:
+            try:
+                # get sentinel info about the master
+                master_info = sentinel.execute_command(f"SENTINEL MASTER {self.charm._name}")
+            except (ConnectionError, TimeoutError) as e:
+                logger.error("Error when connecting to sentinel: {}".format(e))
+
+        # NOTE: master info from redis comes like a list:
+        # ['key1', 'value1', 'key2', 'value2', ...]
+        # this creates a dictionary in a more readable form.
+        master_info = dict(zip(master_info[::2], master_info[1::2]))
+        return master_info
+
+    @property
+    def expected_quorum(self) -> int:
+        """Get the current expected quorum number."""
+        return floor(self.charm.app.planned_units() / 2) + 1
+
+    @property
+    def in_majority(self) -> bool:
+        """Check that sentinel can reach quorum."""
+        majority = False
+        with self.sentinel_client() as sentinel:
+            try:
+                response = sentinel.execute_command(f"SENTINEL CKQUORUM {self.charm._name}")
+                if response.startswith("OK"):
+                    logger.info("Own sentinel instance can reach quorum")
+                    majority = True
+            except RedisError as e:
+                logger.warning("No quorum can be reached: {}".format(e))
+
+        return majority
+
+    @contextmanager
+    def sentinel_client(self, hostname="localhost", timeout=SOCKET_TIMEOUT) -> Redis:
+        """Creates a Redis client on a given hostname.
+
+        Returns:
+            Redis: redis client connected to a sentinel instance
+        """
+        client = Redis(
+            host=hostname,
+            port=SENTINEL_PORT,
+            password=self.charm.get_sentinel_password(),
+            socket_timeout=timeout,
+            decode_responses=True,
+        )
+        try:
+            yield client
+        finally:
+            client.close()
