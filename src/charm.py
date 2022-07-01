@@ -485,16 +485,19 @@ class RedisK8sCharm(CharmBase):
 
         Connect to all Sentinels deployed to update the quorum.
         """
-        for unit in self._peers.units:
-            hostname = self._k8s_hostname(unit.name)
+        hostnames = [self._k8s_hostname(unit.name) for unit in self._peers.units]
+        # Add the own unit
+        hostnames.append(self.unit_pod_hostname)
+
+        for hostname in hostnames:
             with self.sentinel.sentinel_client(hostname=hostname) as sentinel:
                 try:
                     sentinel.execute_command(
                         f"SENTINEL SET {self._name} quorum {self.sentinel.expected_quorum}"
                     )
-                    logger.info(f"Quorum set to {self.sentinel.expected_quorum} on {unit.name}")
+                    logger.info(f"Quorum set to {self.sentinel.expected_quorum} on {hostname}")
                 except ConnectionError as e:
-                    logger.error("Error connecting to instance: {} - {}".format(unit.name, e))
+                    logger.error("Error connecting to instance: {} - {}".format(hostname, e))
 
 
 if __name__ == "__main__":  # pragma: nocover

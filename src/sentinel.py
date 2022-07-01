@@ -17,7 +17,7 @@ from jinja2 import Template
 from ops.framework import Object
 from ops.model import ActiveStatus, WaitingStatus
 from ops.pebble import Layer
-from redis import ConnectionError, Redis, RedisError, TimeoutError
+from redis import ConnectionError, Redis, ResponseError, TimeoutError
 
 from literals import REDIS_PORT, SENTINEL_CONFIG_PATH, SENTINEL_PORT, SOCKET_TIMEOUT
 
@@ -163,7 +163,7 @@ class Sentinel(Object):
                 if response.startswith("OK"):
                     logger.info("Own sentinel instance can reach quorum")
                     majority = True
-            except RedisError as e:
+            except ResponseError as e:
                 logger.warning("No quorum can be reached: {}".format(e))
 
         return majority
