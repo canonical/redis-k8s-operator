@@ -42,7 +42,7 @@ class Sentinel(Object):
         self._update_sentinel_layer()
 
         # update layer should leave the unit in active status
-        if self.charm.unit.status != ActiveStatus():
+        if not isinstance(self.charm.unit.status, ActiveStatus):
             event.defer()
             return
 
