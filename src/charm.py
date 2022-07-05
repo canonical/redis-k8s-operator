@@ -18,7 +18,7 @@ from ops.framework import EventBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
 from ops.pebble import Layer
-from redis import Redis
+from redis import ConnectionError, Redis, TimeoutError
 from redis.exceptions import RedisError
 
 from literals import (
@@ -27,6 +27,7 @@ from literals import (
     PEER_PASSWORD_KEY,
     REDIS_PORT,
     SENTINEL_PASSWORD_KEY,
+    SOCKET_TIMEOUT,
     WAITING_MESSAGE,
 )
 from sentinel import Sentinel
@@ -69,13 +70,18 @@ class RedisK8sCharm(CharmBase):
 
         self._storage_path = self.meta.storages["database"].location
 
-    def _redis_pebble_ready(self, _) -> None:
+    def _redis_pebble_ready(self, event) -> None:
         """Handle the pebble_ready event.
 
         Updates the Pebble layer if needed.
         """
         self._store_certificates()
         self._update_layer()
+
+        # update_layer will set a Waiting status if Pebble is not ready
+        if not isinstance(self.unit.status, ActiveStatus):
+            event.defer()
+            return
 
     def _upgrade_charm(self, _) -> None:
         """Handle the upgrade_charm event.
@@ -120,7 +126,7 @@ class RedisK8sCharm(CharmBase):
         self._update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
-        if self.unit.status != ActiveStatus():
+        if not isinstance(self.unit.status, ActiveStatus):
             event.defer()
             return
 
@@ -132,24 +138,43 @@ class RedisK8sCharm(CharmBase):
         On update status, check the container.
         """
         logger.info("Beginning update_status")
+        if self.unit.is_leader():
+            self._update_application_master()
         self._redis_check()
 
     def _peer_relation_handler(self, event):
         """Handle relation for joining units."""
-        self._update_layer()
+        if not self._check_master():
+            if self.unit.is_leader():
+                # Update who the current master is
+                self._update_application_master()
+            self._update_layer()
 
-        # update layer should leave the unit in active status
-        if self.unit.status != ActiveStatus():
+        if not (self.unit.is_leader() and event.unit):
+            return
+
+        if not self.sentinel.in_majority:
+            self.unit.status = WaitingStatus("Waiting for majority")
             event.defer()
             return
 
-    def _on_redis_relation_created(self, _):
+        # Update quorum for all sentinels
+        self._update_quorum()
+
+    def _on_redis_relation_created(self, event):
         """Handle the relation created event."""
         # TODO: Update warning to point to the new interface once it is created
         logger.warning("DEPRECATION WARNING - `redis` interface is a legacy interface.")
-        if self.unit.is_leader():
-            self._peers.data[self.app]["enable-password"] = "false"
-            self._update_layer()
+        if not self.unit.is_leader():
+            return
+
+        self._peers.data[self.app]["enable-password"] = "false"
+        self._update_layer()
+
+        # update_layer will set a Waiting status if Pebble is not ready
+        if not isinstance(self.unit.status, ActiveStatus):
+            event.defer()
+            return
 
     def _update_layer(self) -> None:
         """Update the Pebble layer.
@@ -175,7 +200,6 @@ class RedisK8sCharm(CharmBase):
 
         # Update the Pebble configuration Layer
         if current_layer.services != new_layer.services:
-            logger.debug("About to add_layer with layer_config:\n{}".format(new_layer))
             container.add_layer("redis", new_layer, combine=True)
             logger.info("Added updated layer 'redis' to Pebble plan")
             container.restart("redis")
@@ -243,8 +267,6 @@ class RedisK8sCharm(CharmBase):
             # relation interface is being used.
             if self._peers.data[self.app].get("enable-password", "true") == "true":
                 extra_flags += [f"--masterauth {self._get_password()}"]
-
-        logger.debug("Extra flags: {}".format(extra_flags))
 
         return " ".join(extra_flags)
 
@@ -401,6 +423,18 @@ class RedisK8sCharm(CharmBase):
             logger.warning(e)
             return None
 
+    def _k8s_hostname(self, name: str) -> str:
+        """Create a DNS name for a Redis unit name.
+
+        Args:
+            name: the Redis unit name, e.g. "redis-k8s-0".
+
+        Returns:
+            A string representing the hostname of the Redis unit.
+        """
+        unit_id = name.split("/")[1]
+        return f"{self._name}-{unit_id}.{self._name}-endpoints.{self._namespace}.svc.cluster.local"
+
     @contextmanager
     def _redis_client(self, hostname="localhost") -> Redis:
         """Creates a Redis client on a given hostname.
@@ -417,11 +451,53 @@ class RedisK8sCharm(CharmBase):
             password=self._get_password(),
             ssl=self.config["enable-tls"],
             ssl_ca_certs=ca_cert_path,
+            decode_responses=True,
+            socket_timeout=SOCKET_TIMEOUT,
         )
         try:
             yield client
         finally:
             client.close()
+
+    def _check_master(self) -> bool:
+        """Connect to the current stored master and query role."""
+        with self._redis_client(hostname=self.current_master) as redis:
+            try:
+                result = redis.execute_command("ROLE")
+            except (ConnectionError, TimeoutError) as e:
+                logger.warning("Error trying to check master: {}".format(e))
+                return False
+
+            if result[0] == "master":
+                return True
+
+        return False
+
+    def _update_application_master(self) -> None:
+        """Use Sentinel to update the current master hostname."""
+        info = self.sentinel.get_master_info()
+        logger.debug(f"Master info: {info}")
+
+        self._peers.data[self.app][LEADER_HOST_KEY] = info["ip"]
+
+    def _update_quorum(self) -> None:
+        """Iterate over the units on the relation, and update their quorum.
+
+        Connect to all Sentinels deployed to update the quorum.
+        """
+        hostnames = [self._k8s_hostname(unit.name) for unit in self._peers.units]
+        # Add the own unit
+        hostnames.append(self.unit_pod_hostname)
+
+        for hostname in hostnames:
+            with self.sentinel.sentinel_client(hostname=hostname) as sentinel:
+                try:
+                    sentinel.execute_command(
+                        f"SENTINEL SET {self._name} quorum {self.sentinel.expected_quorum}"
+                    )
+                    logger.info(f"Quorum set to {self.sentinel.expected_quorum} on {hostname}")
+                except ConnectionError as e:
+                    logger.error("Error connecting to instance: {} - {}".format(hostname, e))
 
 
 if __name__ == "__main__":  # pragma: nocover
