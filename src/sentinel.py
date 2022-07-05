@@ -133,20 +133,20 @@ class Sentinel(Object):
 
     def get_master_info(self, host="localhost") -> Optional[dict]:
         """Connect to sentinel and return the current master."""
-        master_info = None
-
         with self.sentinel_client(host) as sentinel:
             try:
                 # get sentinel info about the master
                 master_info = sentinel.execute_command(f"SENTINEL MASTER {self.charm._name}")
+
+                # NOTE: master info from redis comes like a list:
+                # ['key1', 'value1', 'key2', 'value2', ...]
+                # this creates a dictionary in a more readable form.
+                return dict(zip(master_info[::2], master_info[1::2]))
+
             except (ConnectionError, TimeoutError) as e:
                 logger.error("Error when connecting to sentinel: {}".format(e))
 
-        # NOTE: master info from redis comes like a list:
-        # ['key1', 'value1', 'key2', 'value2', ...]
-        # this creates a dictionary in a more readable form.
-        master_info = dict(zip(master_info[::2], master_info[1::2]))
-        return master_info
+        return None
 
     @property
     def expected_quorum(self) -> int:
@@ -171,6 +171,10 @@ class Sentinel(Object):
     @contextmanager
     def sentinel_client(self, hostname="localhost", timeout=SOCKET_TIMEOUT) -> Redis:
         """Creates a Redis client on a given hostname.
+
+        Args:
+            hostname: String with the hostname to connect to, defaults to localhost
+            timeout: int with the number of seconds for timeout on connection
 
         Returns:
             Redis: redis client connected to a sentinel instance

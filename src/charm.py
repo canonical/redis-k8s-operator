@@ -79,7 +79,7 @@ class RedisK8sCharm(CharmBase):
         self._update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
-        if self.unit.status != ActiveStatus():
+        if not isinstance(self.unit.status, ActiveStatus):
             event.defer()
             return
 
@@ -126,7 +126,7 @@ class RedisK8sCharm(CharmBase):
         self._update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
-        if self.unit.status != ActiveStatus():
+        if not isinstance(self.unit.status, ActiveStatus):
             event.defer()
             return
 
@@ -172,7 +172,7 @@ class RedisK8sCharm(CharmBase):
         self._update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
-        if self.unit.status != ActiveStatus():
+        if not isinstance(self.unit.status, ActiveStatus):
             event.defer()
             return
 
