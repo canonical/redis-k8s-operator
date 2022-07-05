@@ -241,6 +241,61 @@ async def test_sentinels_expected(ops_test: OpsTest):
     assert sentinels_connected == NUM_UNITS
 
 
+@pytest.mark.scale_up
+async def test_scale_up_replication_after_failover(ops_test: OpsTest):
+    """Trigger a failover and scale up the application, then test replication status."""
+    unit_map = await get_unit_map(ops_test)
+    logger.info("Unit mapping: {}".format(unit_map))
+
+    leader_num = get_unit_number(unit_map["leader"])
+    leader_address = await get_address(ops_test, leader_num)
+    password = await get_password(ops_test, leader_num)
+
+    # Set some key on the master replica.
+    leader_client = Redis(leader_address, password=password)
+    leader_client.set("testKey", "myValue")
+    leader_client.close()
+
+    sentinel_password = await get_sentinel_password(ops_test)
+    logger.info("retrieved sentinel password for %s: %s", APP_NAME, password)
+
+    # Trigger a master failover
+    sentinel = Redis(leader_address, password=sentinel_password, port=26379, decode_responses=True)
+    sentinel.execute_command(f"SENTINEL failover {APP_NAME}")
+
+    await ops_test.model.applications[APP_NAME].scale(scale=NUM_UNITS + 1)
+    await ops_test.model.block_until(
+        lambda: len(ops_test.model.applications[APP_NAME].units) == NUM_UNITS + 1
+    )
+
+    # Wait for model to settle
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status="active",
+        idle_period=30,
+        raise_on_blocked=True,
+        timeout=1000,
+    )
+
+    master_info = sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
+    master_info = dict(zip(master_info[::2], master_info[1::2]))
+
+    # General checks that the system is aware of the new unit
+    assert master_info["num-slaves"] == "3"
+    assert master_info["quorum"] == "3"
+    assert master_info["num-other-sentinels"] == "3"
+
+    unit_map = await get_unit_map(ops_test)
+    # Check that the initial key is still replicated across units
+    for i in range(NUM_UNITS + 1):
+        address = await get_address(ops_test, i)
+        client = Redis(address, password=password)
+        assert client.get("testKey") == b"myValue"
+        client.close()
+
+    # TODO: scale-down to reset the model once scale-down logic is added
+
+
 ##################
 # Helper methods #
 ##################

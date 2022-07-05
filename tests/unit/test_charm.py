@@ -30,18 +30,22 @@ class TestCharm(TestCase):
         self.harness.begin()
         self.harness.add_relation(self._peer_relation, self.harness.charm.app.name)
 
+    @mock.patch.object(Redis, "execute_command")
     @mock.patch.object(Redis, "info")
-    def test_on_update_status_success_leader(self, info):
+    def test_on_update_status_success_leader(self, info, command):
         self.harness.set_leader(True)
+        command.return_value = ["ip", APPLICATION_DATA["leader-host"]]
         info.return_value = {"redis_version": "6.0.11"}
         self.harness.charm.on.update_status.emit()
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
 
+    @mock.patch.object(Redis, "execute_command")
     @mock.patch.object(Redis, "info")
-    def test_on_update_status_failure_leader(self, info):
+    def test_on_update_status_failure_leader(self, info, command):
         self.harness.set_leader(True)
+        command.return_value = ["ip", APPLICATION_DATA["leader-host"]]
         info.side_effect = RedisError("Error connecting to redis")
         self.harness.charm.on.update_status.emit()
         self.assertEqual(self.harness.charm.unit.status, WaitingStatus("Waiting for Redis..."))
