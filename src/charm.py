@@ -20,6 +20,7 @@ from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, Waiting
 from ops.pebble import Layer
 from redis import ConnectionError, Redis, TimeoutError
 from redis.exceptions import RedisError
+from tenacity import before_log, retry, stop_after_attempt, wait_fixed
 
 from literals import (
     LEADER_HOST_KEY,
@@ -58,7 +59,8 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._update_status)
 
         self.framework.observe(self.on.redis_relation_created, self._on_redis_relation_created)
-        self.framework.observe(self.on.redis_peers_relation_changed, self._peer_relation_handler)
+        self.framework.observe(self.on[PEER].relation_changed, self._peer_relation_handler)
+        self.framework.observe(self.on[PEER].relation_departed, self._peer_relation_departed)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
         self.framework.observe(
@@ -102,6 +104,17 @@ class RedisK8sCharm(CharmBase):
                 "Initial replication, setting leader-host to {}".format(self.unit_pod_hostname)
             )
             self._peers.data[self.app][LEADER_HOST_KEY] = self.unit_pod_hostname
+        else:
+            # TODO extract to method shared with relation_departed
+            self._update_application_master()
+            self._update_quorum()
+            try:
+                self._is_failover_finished()
+            except Exception:
+                raise
+
+            # logger.warning("Resetting sentinel")
+            # self._reset_sentinel()
 
         if not self._get_password():
             logger.info("Creating password for application")
@@ -148,7 +161,6 @@ class RedisK8sCharm(CharmBase):
             if self.unit.is_leader():
                 # Update who the current master is
                 self._update_application_master()
-            self._update_layer()
 
         if not (self.unit.is_leader() and event.unit):
             return
@@ -160,6 +172,35 @@ class RedisK8sCharm(CharmBase):
 
         # Update quorum for all sentinels
         self._update_quorum()
+
+        self.unit.status = ActiveStatus()
+
+    def _peer_relation_departed(self, event):
+        """Handle relation for leaving units."""
+        if not self.unit.is_leader():
+            return
+
+        if not self._check_master():
+            self._update_application_master()
+
+        # Quorum is updated beforehand, since removal of more units than current majority
+        # could lead to the cluster never reaching quorum.
+        logger.warning("Updating quorum")
+        self._update_quorum()
+
+        try:
+            self._sentinel_failover(event.departing_unit.name)
+        except Exception:
+            msg = "Failover didn't finish, deferring"
+            logger.error(msg)
+            self.unit.status == WaitingStatus(msg)
+            event.defer()
+            return
+
+        # logger.warning("Resetting sentinel")
+        # self._reset_sentinel()
+
+        self.unit.status = ActiveStatus()
 
     def _on_redis_relation_created(self, event):
         """Handle the relation created event."""
@@ -235,7 +276,11 @@ class RedisK8sCharm(CharmBase):
         Will check config options to decide the extra commands passed at the
         redis-server service.
         """
-        extra_flags = [f"--requirepass {self._get_password()}", "--bind 0.0.0.0"]
+        extra_flags = [
+            f"--requirepass {self._get_password()}",
+            "--bind 0.0.0.0",
+            f"--masterauth {self._get_password()}",
+        ]
 
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             logger.warning(
@@ -262,11 +307,6 @@ class RedisK8sCharm(CharmBase):
 
             if self.config["enable-tls"]:
                 extra_flags += ["--tls-replication yes"]
-
-            # NOTE: (DEPRECATE) This check will evaluate to false in the case the `redis`
-            # relation interface is being used.
-            if self._peers.data[self.app].get("enable-password", "true") == "true":
-                extra_flags += [f"--masterauth {self._get_password()}"]
 
         return " ".join(extra_flags)
 
@@ -477,14 +517,65 @@ class RedisK8sCharm(CharmBase):
         """Use Sentinel to update the current master hostname."""
         info = self.sentinel.get_master_info()
         logger.debug(f"Master info: {info}")
+        if info is None:
+            logger.warning("Could not update current master")
+            return
 
         self._peers.data[self.app][LEADER_HOST_KEY] = info["ip"]
+
+    def _sentinel_failover(self, departing_unit_name: str) -> None:
+        """Try to failover the current master."""
+        if departing_unit_name != self.current_master:
+            # No failover needed
+            return
+
+        with self.sentinel.sentinel_client() as sentinel:
+            try:
+                sentinel.execute_command(f"SENTINEL FAILOVER {self._name}")
+            except RedisError as e:
+                logger.error("Error triggering a failover: {}".format(e))
+                return
+
+        try:
+            self._is_failover_finished()
+        except Exception:
+            raise
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(10),
+        reraise=True,
+        before=before_log(logger, logging.DEBUG),
+    )
+    def _is_failover_finished(self) -> None:
+        """Check if failover is still in progress."""
+        logger.warning("Checking if failover is finished.")
+        info = self.sentinel.get_master_info()
+        if info is None:
+            logger.warning("Could not check failover status")
+            raise Exception
+
+        if "failover-state" in info:
+            logger.warning(
+                "Failover taking place. Current status: {}".format(info["failover-state"])
+            )
+            raise Exception
 
     def _update_quorum(self) -> None:
         """Iterate over the units on the relation, and update their quorum.
 
         Connect to all Sentinels deployed to update the quorum.
         """
+        command = f"SENTINEL SET {self._name} quorum {self.sentinel.expected_quorum}"
+        self._broadcast_sentinel_command(command)
+
+    def _reset_sentinel(self):
+        """Reset sentinel to process changes during scale-down operations mainly."""
+        command = f"SENTINEL RESET {self._name}"
+        self._broadcast_sentinel_command(command)
+
+    def _broadcast_sentinel_command(self, command: str) -> None:
+        """Broadcast a command to all sentinel instances."""
         hostnames = [self._k8s_hostname(unit.name) for unit in self._peers.units]
         # Add the own unit
         hostnames.append(self.unit_pod_hostname)
@@ -492,11 +583,9 @@ class RedisK8sCharm(CharmBase):
         for hostname in hostnames:
             with self.sentinel.sentinel_client(hostname=hostname) as sentinel:
                 try:
-                    sentinel.execute_command(
-                        f"SENTINEL SET {self._name} quorum {self.sentinel.expected_quorum}"
-                    )
-                    logger.info(f"Quorum set to {self.sentinel.expected_quorum} on {hostname}")
-                except ConnectionError as e:
+                    logger.debug("Sending {} to sentinel at {}".format(command, hostname))
+                    sentinel.execute_command(command)
+                except (ConnectionError, TimeoutError) as e:
                     logger.error("Error connecting to instance: {} - {}".format(hostname, e))
 
 

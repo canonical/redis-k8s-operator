@@ -39,6 +39,9 @@ containers:
         location: /var/lib/redis
   sentinel:
     resource: redis-image
+    mounts:
+      - storage: config
+        location: /etc/redis
 
 resources:
   redis-image:
@@ -59,6 +62,9 @@ storage:
   database:
     type: filesystem
     location: /var/lib/redis
+  config:
+    type: filesystem
+    location: /etc/redis
 
 peers:
   redis-peers:
