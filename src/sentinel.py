@@ -19,7 +19,13 @@ from ops.model import ActiveStatus, WaitingStatus
 from ops.pebble import Layer
 from redis import ConnectionError, Redis, ResponseError, TimeoutError
 
-from literals import REDIS_PORT, SENTINEL_CONFIG_PATH, SENTINEL_PORT, SOCKET_TIMEOUT
+from literals import (
+    CONFIG_DIR,
+    REDIS_PORT,
+    SENTINEL_CONFIG_PATH,
+    SENTINEL_PORT,
+    SOCKET_TIMEOUT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -122,11 +128,19 @@ class Sentinel(Object):
             logger.warning("Can't connect to {} container".format(container))
             return
 
+        if not container.exists(CONFIG_DIR):
+            container.make_dir(
+                CONFIG_DIR,
+                make_parents=True,
+                permissions=0o770,
+                user="redis",
+                group="redis",
+            )
+
         container.push(
             path,
             rendered,
-            make_dirs=True,
-            permissions=0o600,
+            permissions=0o660,
             user="redis",
             group="redis",
         )
