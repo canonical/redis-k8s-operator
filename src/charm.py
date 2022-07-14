@@ -59,7 +59,7 @@ class RedisK8sCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._update_status)
 
         self.framework.observe(self.on.redis_relation_created, self._on_redis_relation_created)
-        self.framework.observe(self.on[PEER].relation_changed, self._peer_relation_handler)
+        self.framework.observe(self.on[PEER].relation_changed, self._peer_relation_changed)
         self.framework.observe(self.on[PEER].relation_departed, self._peer_relation_departed)
 
         self.framework.observe(self.on.check_service_action, self.check_service)
@@ -113,8 +113,8 @@ class RedisK8sCharm(CharmBase):
             except Exception:
                 raise
 
-            # logger.warning("Resetting sentinel")
-            # self._reset_sentinel()
+            logger.warning("Resetting sentinel")
+            self._reset_sentinel()
 
         if not self._get_password():
             logger.info("Creating password for application")
@@ -155,7 +155,7 @@ class RedisK8sCharm(CharmBase):
             self._update_application_master()
         self._redis_check()
 
-    def _peer_relation_handler(self, event):
+    def _peer_relation_changed(self, event):
         """Handle relation for joining units."""
         if not self._check_master():
             if self.unit.is_leader():
@@ -197,8 +197,8 @@ class RedisK8sCharm(CharmBase):
             event.defer()
             return
 
-        # logger.warning("Resetting sentinel")
-        # self._reset_sentinel()
+        logger.warning("Resetting sentinel")
+        self._reset_sentinel()
 
         self.unit.status = ActiveStatus()
 
@@ -280,6 +280,7 @@ class RedisK8sCharm(CharmBase):
             f"--requirepass {self._get_password()}",
             "--bind 0.0.0.0",
             f"--masterauth {self._get_password()}",
+            f"--replica-announce-ip {self.unit_pod_hostname}",
         ]
 
         if self._peers.data[self.app].get("enable-password", "true") == "false":
@@ -300,10 +301,7 @@ class RedisK8sCharm(CharmBase):
 
         # Check that current unit is master
         if self.current_master != self.unit_pod_hostname:
-            extra_flags += [
-                f"--replicaof {self.current_master} {REDIS_PORT}",
-                f"--replica-announce-ip {self.unit_pod_hostname}",
-            ]
+            extra_flags += [f"--replicaof {self.current_master} {REDIS_PORT}"]
 
             if self.config["enable-tls"]:
                 extra_flags += ["--tls-replication yes"]
@@ -562,20 +560,21 @@ class RedisK8sCharm(CharmBase):
             raise Exception
 
     def _update_quorum(self) -> None:
-        """Iterate over the units on the relation, and update their quorum.
-
-        Connect to all Sentinels deployed to update the quorum.
-        """
+        """Connect to all Sentinels deployed to update the quorum."""
         command = f"SENTINEL SET {self._name} quorum {self.sentinel.expected_quorum}"
         self._broadcast_sentinel_command(command)
 
     def _reset_sentinel(self):
-        """Reset sentinel to process changes during scale-down operations mainly."""
+        """Reset sentinel to process changes and remove unreachable servers/sentinels."""
         command = f"SENTINEL RESET {self._name}"
         self._broadcast_sentinel_command(command)
 
     def _broadcast_sentinel_command(self, command: str) -> None:
-        """Broadcast a command to all sentinel instances."""
+        """Broadcast a command to all sentinel instances.
+
+        Args:
+            command: string with the command to broadcast to all sentinels
+        """
         hostnames = [self._k8s_hostname(unit.name) for unit in self._peers.units]
         # Add the own unit
         hostnames.append(self.unit_pod_hostname)
