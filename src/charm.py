@@ -116,7 +116,7 @@ class RedisK8sCharm(CharmBase):
                 event.defer()
                 return
 
-            logger.warning("Resetting sentinel")
+            logger.info("Resetting sentinel")
             self._reset_sentinel()
 
         if not self._get_password():
@@ -188,7 +188,7 @@ class RedisK8sCharm(CharmBase):
 
         # Quorum is updated beforehand, since removal of more units than current majority
         # could lead to the cluster never reaching quorum.
-        logger.warning("Updating quorum")
+        logger.info("Updating quorum")
         self._update_quorum()
 
         try:
@@ -208,7 +208,7 @@ class RedisK8sCharm(CharmBase):
             event.defer()
             return
 
-        logger.warning("Resetting sentinel")
+        logger.info("Resetting sentinel")
         self._reset_sentinel()
 
         self.unit.status = ActiveStatus()
@@ -469,7 +469,7 @@ class RedisK8sCharm(CharmBase):
             # Fetch the resource path
             return self.model.resources.fetch(resource)
         except (ModelError, NameError) as e:
-            logger.warning(e)
+            logger.info(e)
             return None
 
     def _k8s_hostname(self, name: str) -> str:
