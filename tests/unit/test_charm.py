@@ -83,6 +83,8 @@ class TestCharm(TestCase):
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
+            f"--masterauth {self.harness.charm._get_password()}",
+            f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
         ]
         expected_plan = {
             "services": {
@@ -113,6 +115,8 @@ class TestCharm(TestCase):
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
+            f"--masterauth {self.harness.charm._get_password()}",
+            f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
         ]
         expected_plan = {
             "services": {
@@ -216,7 +220,10 @@ class TestCharm(TestCase):
 
         # Check that the resulting plan does not have a password
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
-        extra_flags = ["--bind 0.0.0.0"]
+        extra_flags = [
+            "--bind 0.0.0.0",
+            f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
+        ]
         expected_plan = {
             "services": {
                 "redis": {
@@ -272,6 +279,8 @@ class TestCharm(TestCase):
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
+            f"--masterauth {self.harness.charm._get_password()}",
+            f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--tls-port 6379",
             "--port 0",
             "--tls-auth-clients optional",
@@ -300,21 +309,33 @@ class TestCharm(TestCase):
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
 
-    def test_non_leader_unit_as_replica(self):
+    @mock.patch.object(Redis, "execute_command")
+    def test_non_leader_unit_as_replica(self, execute_command):
+        # Custom responses to Redis `execute_command` call
+        def my_side_effect(value: str):
+            if value == "ROLE":
+                return ["master"]
+            if value == f"SENTINEL CKQUORUM {self.harness.charm._name}":
+                return "OK"
+
+        execute_command.side_effect = my_side_effect
+
         rel = self.harness.charm.model.get_relation(self._peer_relation)
         # Trigger peer_relation_joined/changed
         self.harness.add_relation_unit(rel.id, "redis-k8s/1")
         # Simulate an update to the application databag made by the leader unit
         self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
+        # A pebble ready event will set the non-leader unit with the correct information
+        self.harness.container_pebble_ready("redis")
 
         leader_hostname = APPLICATION_DATA["leader-host"]
         redis_port = 6379
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
-            f"--replicaof {leader_hostname} {redis_port}",
-            f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             f"--masterauth {self.harness.charm._get_password()}",
+            f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
+            f"--replicaof {leader_hostname} {redis_port}",
         ]
         expected_plan = {
             "services": {

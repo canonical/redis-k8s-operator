@@ -298,7 +298,7 @@ class RedisK8sCharm(CharmBase):
             logger.warning(
                 "DEPRECATION WARNING - password off, this will be removed on later versions"
             )
-            extra_flags = ["--bind 0.0.0.0"]
+            extra_flags = ["--bind 0.0.0.0", f"--replica-announce-ip {self.unit_pod_hostname}"]
 
         if self.config["enable-tls"]:
             extra_flags += [
