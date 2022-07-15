@@ -534,7 +534,7 @@ class RedisK8sCharm(CharmBase):
 
     def _sentinel_failover(self, departing_unit_name: str) -> None:
         """Try to failover the current master."""
-        if departing_unit_name != self.current_master:
+        if self._k8s_hostname(departing_unit_name) != self.current_master:
             # No failover needed
             return
 

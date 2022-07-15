@@ -5,6 +5,7 @@
 from unittest import TestCase, mock
 
 from charms.redis_k8s.v0.redis import RedisProvides
+from ops.charm import RelationDepartedEvent
 from ops.model import (
     ActiveStatus,
     BlockedStatus,
@@ -353,3 +354,63 @@ class TestCharm(TestCase):
 
         self.assertEqual(expected_plan, found_plan)
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
+
+    @mock.patch.object(Redis, "execute_command")
+    def test_application_data_update_after_failover(self, execute_command):
+        # Custom responses to Redis `execute_command` call
+        def my_side_effect(value: str):
+            if value == "ROLE":
+                return ["non-master"]
+            if value == f"SENTINEL CKQUORUM {self.harness.charm._name}":
+                return "OK"
+            if value == f"SENTINEL MASTER {self.harness.charm._name}":
+                return ["ip", "different-leader"]
+
+        execute_command.side_effect = my_side_effect
+
+        self.harness.set_leader(True)
+        rel = self.harness.charm.model.get_relation(self._peer_relation)
+        # Trigger peer_relation_joined/changed
+        self.harness.add_relation_unit(rel.id, "redis-k8s/1")
+        # Simulate an update to the application databag made by the leader unit
+        self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
+
+        # NOTE: On config changed, charm will be updated with APPLICATION_DATA. But a
+        # call to `execute_command(SENTINEL MASTER redis-k8s)` will return `different_leader`
+        # when checking the master, simulating that sentinel triggered failover in between
+        # charm events.
+        self.harness._emit_relation_changed(rel.id, "redis-k8s")
+
+        updated_data = self.harness.get_relation_data(rel.id, "redis-k8s")
+        self.assertEqual(updated_data["leader-host"], "different-leader")
+
+    @mock.patch.object(Redis, "execute_command")
+    def test_forced_failover_when_unit_departed_is_master(self, execute_command):
+        # Custom responses to Redis `execute_command` call
+        def my_side_effect(value: str):
+            if value == "ROLE":
+                return ["non-master"]
+            if value == f"SENTINEL CKQUORUM {self.harness.charm._name}":
+                return "OK"
+            if value == f"SENTINEL MASTER {self.harness.charm._name}":
+                return ["ip", self.harness.charm._k8s_hostname("redis-k8s/1")]
+
+        execute_command.side_effect = my_side_effect
+
+        self.harness.set_leader(True)
+        rel = self.harness.charm.model.get_relation(self._peer_relation)
+        # Simulate an update to the application databag made by the leader unit
+        self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
+        # Add and remove a unit that sentinel will simulate as current master
+        self.harness.add_relation_unit(rel.id, "redis-k8s/1")
+
+        rel = self.harness.charm.model.get_relation(self._peer_relation)
+        # Workaround ops.testing not setting `departing_unit` in v1.5.0
+        # ref https://github.com/canonical/operator/pull/790
+        with mock.patch.object(
+            RelationDepartedEvent, "departing_unit", new_callable=mock.PropertyMock
+        ) as mock_departing_unit:
+            mock_departing_unit.return_value = list(rel.units)[0]
+            self.harness.remove_relation_unit(rel.id, "redis-k8s/1")
+
+        execute_command.assert_called_with("SENTINEL RESET redis-k8s")
