@@ -22,6 +22,7 @@ from redis import ConnectionError, Redis, TimeoutError
 from redis.exceptions import RedisError
 from tenacity import before_log, retry, stop_after_attempt, wait_fixed
 
+from exceptions import RedisFailoverCheckError, RedisFailoverInProgressError
 from literals import (
     LEADER_HOST_KEY,
     PEER,
@@ -93,7 +94,7 @@ class RedisK8sCharm(CharmBase):
         """
         self._store_certificates()
 
-    def _leader_elected(self, _) -> None:
+    def _leader_elected(self, event) -> None:
         """Handle the leader_elected event.
 
         If no password exists, a new one will be created for accessing Redis. This password
@@ -110,8 +111,10 @@ class RedisK8sCharm(CharmBase):
             self._update_quorum()
             try:
                 self._is_failover_finished()
-            except Exception:
-                raise
+            except (RedisFailoverCheckError, RedisFailoverInProgressError):
+                logger.info("Failover didn't finish, deferring")
+                event.defer()
+                return
 
             logger.warning("Resetting sentinel")
             self._reset_sentinel()
@@ -190,9 +193,17 @@ class RedisK8sCharm(CharmBase):
 
         try:
             self._sentinel_failover(event.departing_unit.name)
-        except Exception:
-            msg = "Failover didn't finish, deferring"
+        except RedisError as e:
+            msg = f"Error on failover: {e}"
             logger.error(msg)
+            self.unit.status == BlockedStatus(msg)
+            return
+
+        try:
+            self._is_failover_finished()
+        except (RedisFailoverCheckError, RedisFailoverInProgressError):
+            msg = "Failover didn't finish, deferring"
+            logger.info(msg)
             self.unit.status == WaitingStatus(msg)
             event.defer()
             return
@@ -530,14 +541,8 @@ class RedisK8sCharm(CharmBase):
         with self.sentinel.sentinel_client() as sentinel:
             try:
                 sentinel.execute_command(f"SENTINEL FAILOVER {self._name}")
-            except RedisError as e:
-                logger.error("Error triggering a failover: {}".format(e))
-                return
-
-        try:
-            self._is_failover_finished()
-        except Exception:
-            raise
+            except RedisError:
+                raise
 
     @retry(
         stop=stop_after_attempt(3),
@@ -551,13 +556,13 @@ class RedisK8sCharm(CharmBase):
         info = self.sentinel.get_master_info()
         if info is None:
             logger.warning("Could not check failover status")
-            raise Exception
+            raise RedisFailoverCheckError
 
         if "failover-state" in info:
             logger.warning(
                 "Failover taking place. Current status: {}".format(info["failover-state"])
             )
-            raise Exception
+            raise RedisFailoverInProgressError
 
     def _update_quorum(self) -> None:
         """Connect to all Sentinels deployed to update the quorum."""
