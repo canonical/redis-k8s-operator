@@ -342,7 +342,7 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
         client = Redis(address, password=password)
         assert client.get("testKey") == b"myValue"
         client.close()
-    
+
     master_info = sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
     master_info = dict(zip(master_info[::2], master_info[1::2]))
 
