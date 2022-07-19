@@ -324,7 +324,7 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
     # Failover so the last unit becomes master
     sentinel.execute_command(f"SENTINEL FAILOVER {APP_NAME}")
     # Give time so sentinel updates information of failover
-    time.sleep(1)
+    time.sleep(3)
 
     await ops_test.model.block_until(
         lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
