@@ -165,6 +165,11 @@ class RedisK8sCharm(CharmBase):
                 # Update who the current master is
                 self._update_application_master()
 
+        # (DEPRECATE) If legacy relation exists, layer might need to be
+        # reconfigured to remove auth
+        if self._peers.data[self.app].get("enable-password", "true") == "false":
+            self._update_layer()
+
         if not (self.unit.is_leader() and event.unit):
             return
 
