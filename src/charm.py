@@ -550,8 +550,8 @@ class RedisK8sCharm(CharmBase):
                 raise
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(10),
+        stop=stop_after_attempt(4),
+        wait=wait_fixed(15),
         reraise=True,
         before=before_log(logger, logging.DEBUG),
     )
