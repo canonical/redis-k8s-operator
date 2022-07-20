@@ -102,6 +102,13 @@ class RedisK8sCharm(CharmBase):
 
         Additionally, there is a check for departing juju leader on scale-down operations.
         """
+        if not self._get_password():
+            logger.info("Creating password for application")
+            self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
+
+        if not self.get_sentinel_password():
+            logger.info("Creating sentinel password")
+            self._peers.data[self.app][SENTINEL_PASSWORD_KEY] = self._generate_password()
         # NOTE: if current_master is not set yet, the application is being deployed for the
         # first time. Otherwise, we check for failover in case previous juju leader was redis
         # master as well.
@@ -123,14 +130,6 @@ class RedisK8sCharm(CharmBase):
 
             logger.info("Resetting sentinel")
             self._reset_sentinel()
-
-        if not self._get_password():
-            logger.info("Creating password for application")
-            self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
-
-        if not self.get_sentinel_password():
-            logger.info("Creating sentinel password")
-            self._peers.data[self.app][SENTINEL_PASSWORD_KEY] = self._generate_password()
 
     def _config_changed(self, event: EventBase) -> None:
         """Handle config_changed event.
