@@ -128,6 +128,8 @@ class Sentinel(Object):
             logger.warning("Can't connect to {} container".format(container))
             return
 
+        # NOTE: Creating the dir with correct user:group and permissions is needed
+        # until https://github.com/canonical/pebble/issues/124 is fixed.
         if not container.exists(CONFIG_DIR):
             container.make_dir(
                 CONFIG_DIR,

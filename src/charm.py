@@ -97,9 +97,14 @@ class RedisK8sCharm(CharmBase):
     def _leader_elected(self, event) -> None:
         """Handle the leader_elected event.
 
-        If no password exists, a new one will be created for accessing Redis. This password
-        will be stored on the peer relation databag.
+        If no passwords exist, new ones will be created for accessing Redis/Sentinel.
+        This passwords will be stored on the peer relation databag.
+
+        Additionally, there is a check for departing juju leader on scale-down operations.
         """
+        # NOTE: if current_master is not set yet, the application is being deployed for the
+        # first time. Otherwise, we check for failover in case previous juju leader was redis
+        # master as well.
         if self.current_master is None:
             logger.info(
                 "Initial replication, setting leader-host to {}".format(self.unit_pod_hostname)
@@ -538,16 +543,17 @@ class RedisK8sCharm(CharmBase):
         self._peers.data[self.app][LEADER_HOST_KEY] = info["ip"]
 
     def _sentinel_failover(self, departing_unit_name: str) -> None:
-        """Try to failover the current master."""
+        """Try to failover the current master.
+        
+        This method should only be called from juju leader, to avoid more than one
+        sentinel sending failovers concurrently.
+        """
         if self._k8s_hostname(departing_unit_name) != self.current_master:
             # No failover needed
             return
 
         with self.sentinel.sentinel_client() as sentinel:
-            try:
-                sentinel.execute_command(f"SENTINEL FAILOVER {self._name}")
-            except RedisError:
-                raise
+            sentinel.execute_command(f"SENTINEL FAILOVER {self._name}")
 
     @retry(
         stop=stop_after_attempt(4),
