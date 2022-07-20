@@ -544,7 +544,7 @@ class RedisK8sCharm(CharmBase):
 
     def _sentinel_failover(self, departing_unit_name: str) -> None:
         """Try to failover the current master.
-        
+
         This method should only be called from juju leader, to avoid more than one
         sentinel sending failovers concurrently.
         """
