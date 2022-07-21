@@ -24,7 +24,7 @@ class RedisOperatorError(Exception):
 
 
 class RedisFailoverInProgressError(RedisOperatorError):
-    """Exception raised when creating a user fails."""
+    """Exception raised when failover is in progress."""
 
 
 class RedisFailoverCheckError(RedisOperatorError):
