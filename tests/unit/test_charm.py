@@ -314,10 +314,11 @@ class TestCharm(TestCase):
     def test_non_leader_unit_as_replica(self, execute_command):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
-            if value == "ROLE":
-                return ["master"]
-            if value == f"SENTINEL CKQUORUM {self.harness.charm._name}":
-                return "OK"
+            mapping = {
+                "ROLE": ["master"],
+                f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
+            }
+            return mapping.get(value)
 
         execute_command.side_effect = my_side_effect
 
@@ -359,12 +360,12 @@ class TestCharm(TestCase):
     def test_application_data_update_after_failover(self, execute_command):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
-            if value == "ROLE":
-                return ["non-master"]
-            if value == f"SENTINEL CKQUORUM {self.harness.charm._name}":
-                return "OK"
-            if value == f"SENTINEL MASTER {self.harness.charm._name}":
-                return ["ip", "different-leader"]
+            mapping = {
+                "ROLE": ["non-master"],
+                f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
+                f"SENTINEL MASTER {self.harness.charm._name}": ["ip", "different-leader"],
+            }
+            return mapping.get(value)
 
         execute_command.side_effect = my_side_effect
 
@@ -388,12 +389,15 @@ class TestCharm(TestCase):
     def test_forced_failover_when_unit_departed_is_master(self, execute_command):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
-            if value == "ROLE":
-                return ["non-master"]
-            if value == f"SENTINEL CKQUORUM {self.harness.charm._name}":
-                return "OK"
-            if value == f"SENTINEL MASTER {self.harness.charm._name}":
-                return ["ip", self.harness.charm._k8s_hostname("redis-k8s/1")]
+            mapping = {
+                "ROLE": ["non-master"],
+                f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
+                f"SENTINEL MASTER {self.harness.charm._name}": [
+                    "ip",
+                    self.harness.charm._k8s_hostname("redis-k8s/1"),
+                ],
+            }
+            return mapping.get(value)
 
         execute_command.side_effect = my_side_effect
 
