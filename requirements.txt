@@ -2,6 +2,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-ops~=1.4.0
+ops~=1.5.0
 redis~=3.5.3
 jinja2==3.1.1
+tenacity==8.0.1

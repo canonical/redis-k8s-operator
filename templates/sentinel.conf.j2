@@ -1,7 +1,7 @@
 port {{ sentinel_port }}
 sentinel monitor {{ master_name }} {{ redis_master }} {{ redis_port }} {{ quorum }}
-sentinel down-after-milliseconds {{ master_name }} 30000
-sentinel failover-timeout {{ master_name }} 180000
+sentinel down-after-milliseconds {{ master_name }} 5000
+sentinel failover-timeout {{ master_name }} 30000
 sentinel parallel-syncs {{ master_name }} 1
 
 {% if master_password != None %}

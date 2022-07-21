@@ -4,6 +4,7 @@
 
 
 import logging
+import time
 
 import pytest
 from pytest_operator.plugin import OpsTest
@@ -241,7 +242,8 @@ async def test_sentinels_expected(ops_test: OpsTest):
     assert sentinels_connected == NUM_UNITS
 
 
-@pytest.mark.scale_up
+@pytest.mark.run(before="test_scale_down_departing_master")
+@pytest.mark.scaling
 async def test_scale_up_replication_after_failover(ops_test: OpsTest):
     """Trigger a failover and scale up the application, then test replication status."""
     unit_map = await get_unit_map(ops_test)
@@ -293,12 +295,85 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
         assert client.get("testKey") == b"myValue"
         client.close()
 
-    # TODO: scale-down to reset the model once scale-down logic is added
+
+@pytest.mark.run(after="test_scale_up_replication_after_failover")
+@pytest.mark.scaling
+async def test_scale_down_departing_master(ops_test: OpsTest):
+    """Failover to the last unit and scale down."""
+    unit_map = await get_unit_map(ops_test)
+    logger.info("Unit mapping: {}".format(unit_map))
+
+    # NOTE: since this test will run after the previous, we know that the application
+    # has NUM_UNITS + 1 units. Last unit will be application-name/3
+    last_unit = NUM_UNITS
+
+    leader_address = await get_address(ops_test, get_unit_number(unit_map["leader"]))
+    last_address = await get_address(ops_test, last_unit)
+    password = await get_password(ops_test, 0)
+    sentinel_password = await get_sentinel_password(ops_test, 0)
+
+    sentinel = Redis(leader_address, port=26379, password=sentinel_password, decode_responses=True)
+    last_redis = Redis(last_address, password=password, decode_responses=True)
+
+    # INITIAL SETUP #
+    # Sanity check that the added unit on the previous test is not a master
+    assert last_redis.execute_command("ROLE")[0] != "master"
+
+    # Make the added unit a priority during failover
+    last_redis.execute_command("CONFIG SET replica-priority 1")
+    # Failover so the last unit becomes master
+    sentinel.execute_command(f"SENTINEL FAILOVER {APP_NAME}")
+    # Give time so sentinel updates information of failover
+    time.sleep(3)
+
+    await ops_test.model.block_until(
+        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
+    )
+    assert last_redis.execute_command("ROLE")[0] == "master"
+
+    last_redis.close()
+
+    # SCALE DOWN #
+    await scale(ops_test, scale=NUM_UNITS)
+
+    # Check that the initial key is still replicated across units
+    for i in range(NUM_UNITS):
+        address = await get_address(ops_test, i)
+        client = Redis(address, password=password)
+        assert client.get("testKey") == b"myValue"
+        client.close()
+
+    master_info = sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
+    master_info = dict(zip(master_info[::2], master_info[1::2]))
+
+    # General checks that the system is reconfigured after departed leader
+    assert master_info["num-slaves"] == "2"
+    assert master_info["quorum"] == "2"
+    assert master_info["num-other-sentinels"] == "2"
+
+    sentinel.close()
 
 
 ##################
 # Helper methods #
 ##################
+
+
+async def scale(ops_test: OpsTest, scale: int) -> None:
+    """Scale the application to the provided number and wait for idle."""
+    await ops_test.model.applications[APP_NAME].scale(scale=scale)
+    await ops_test.model.block_until(
+        lambda: len(ops_test.model.applications[APP_NAME].units) == scale
+    )
+
+    # Wait for model to settle
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status="active",
+        idle_period=30,
+        raise_on_blocked=True,
+        timeout=1000,
+    )
 
 
 async def get_password(ops_test: OpsTest, num_unit=0) -> str:
