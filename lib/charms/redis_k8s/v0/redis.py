@@ -32,6 +32,7 @@ requires:
 ```
 """
 import logging
+import socket
 
 from ops.charm import CharmEvents
 from ops.framework import EventBase, EventSource, Object
@@ -94,6 +95,7 @@ class RedisProvides(Object):
         super().__init__(charm, "redis")
         self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
         self._port = port
+        self._charm = charm
 
     def _on_relation_changed(self, event):
         """Handle the relation changed event."""
@@ -101,7 +103,7 @@ class RedisProvides(Object):
             logger.debug("Relation changes ignored by non-leader")
             return
 
-        event.relation.data[self.model.unit]['hostname'] = str(self._bind_address(event))
+        event.relation.data[self.model.unit]['hostname'] = self._get_master_ip()
         event.relation.data[self.model.unit]['port'] = str(self._port)
         # The reactive Redis charm also exposes 'password'. When tackling
         # https://github.com/canonical/redis-k8s/issues/7 add 'password'
@@ -114,3 +116,7 @@ class RedisProvides(Object):
         if address := self.model.get_binding(relation).network.bind_address:
             return address
         return self.app.name
+
+    def _get_master_ip(self) -> str:
+        """Gets the ip of the current redis master."""
+        return socket.gethostbyname(self._charm.current_master)
