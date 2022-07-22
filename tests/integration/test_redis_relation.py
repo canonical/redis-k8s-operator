@@ -7,10 +7,9 @@ import logging
 
 import pytest as pytest
 from pytest_operator.plugin import OpsTest
-from redis import Redis
 
 from tests.helpers import APP_NAME, METADATA, NUM_UNITS
-from tests.integration.helpers import get_address, get_unit_map
+from tests.integration.helpers import get_address
 
 FIRST_DISCOURSE_APP_NAME = "discourse-k8s"
 SECOND_DISCOURSE_APP_NAME = "discourse-charmers-discourse-k8s"
@@ -57,6 +56,7 @@ async def test_build_and_deploy(ops_test: OpsTest):
         await ops_test.model.wait_for_idle(
             apps=[FIRST_DISCOURSE_APP_NAME], status="blocked", timeout=1000
         )
+
 
 @pytest.mark.order(2)
 @pytest.mark.redis_tests

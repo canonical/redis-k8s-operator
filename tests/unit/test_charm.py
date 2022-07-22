@@ -154,7 +154,7 @@ class TestCharm(TestCase):
         mock_container.restart.assert_not_called()
         self.assertEqual(
             self.harness.charm.unit.status,
-            WaitingStatus("Waiting for Pebble in workload container"),
+            WaitingStatus("Waiting for Pebble in sentinel container"),
         )
         self.assertEqual(self.harness.charm.app.status, UnknownStatus())
         self.assertEqual(self.harness.get_workload_version(), None)
@@ -196,11 +196,11 @@ class TestCharm(TestCase):
             admin_password,
         )
 
-    @mock.patch.object(RedisProvides, "_bind_address")
-    def test_on_relation_changed_status_when_unit_is_leader(self, bind_address):
+    @mock.patch.object(RedisProvides, "_get_master_ip")
+    def test_on_relation_changed_status_when_unit_is_leader(self, get_master_ip):
         # Given
         self.harness.set_leader(True)
-        bind_address.return_value = "10.2.1.5"
+        get_master_ip.return_value = "10.2.1.5"
 
         rel_id = self.harness.add_relation("redis", "wordpress")
         self.harness.add_relation_unit(rel_id, "wordpress/0")
