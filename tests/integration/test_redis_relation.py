@@ -9,7 +9,7 @@ import pytest as pytest
 from pytest_operator.plugin import OpsTest
 
 from tests.helpers import APP_NAME, METADATA, NUM_UNITS
-from tests.integration.helpers import get_address
+from tests.integration.helpers import get_address, get_unit_map, get_unit_number
 
 FIRST_DISCOURSE_APP_NAME = "discourse-k8s"
 SECOND_DISCOURSE_APP_NAME = "discourse-charmers-discourse-k8s"
@@ -87,10 +87,11 @@ async def test_keys_replicated(ops_test: OpsTest):
 
 @pytest.mark.redis_tests
 async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
-    # Test the second Discourse charm.
+    """Test the second Discourse charm."""
+    unit_map = await get_unit_map(ops_test)
 
     # Get the Redis instance IP address.
-    redis_host = await get_address(ops_test, f"{APP_NAME}/0")
+    redis_host = await get_address(ops_test, get_unit_number(unit_map["leader"]))
 
     # Deploy Discourse and wait for it to be blocked waiting for database relation.
     await ops_test.model.deploy(
