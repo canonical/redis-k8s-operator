@@ -300,7 +300,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
     unit_map = await get_unit_map(ops_test)
     # Check that the initial key is still replicated across units
     for i in range(NUM_UNITS + 1):
-        address = await get_address(ops_test, i)
+        address = await get_address(ops_test, unit_num=i)
         client = Redis(address, password=password)
         assert client.get("testKey") == b"myValue"
         client.close()
