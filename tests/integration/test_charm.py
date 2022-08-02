@@ -217,7 +217,7 @@ async def test_replication(ops_test: OpsTest):
 
     leader_num = get_unit_number(unit_map["leader"])
     leader_address = await get_address(ops_test, unit_num=leader_num)
-    password = await get_password(ops_test, unit_num=leader_num)
+    password = await get_password(ops_test, leader_num)
 
     leader_client = Redis(leader_address, password=password)
     leader_client.set("testKey", "myValue")
@@ -319,8 +319,8 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
 
     leader_address = await get_address(ops_test, unit_num=get_unit_number(unit_map["leader"]))
     last_address = await get_address(ops_test, unit_num=last_unit)
-    password = await get_password(ops_test, 0)
-    sentinel_password = await get_sentinel_password(ops_test, 0)
+    password = await get_password(ops_test)
+    sentinel_password = await get_sentinel_password(ops_test)
 
     sentinel = Redis(leader_address, port=26379, password=sentinel_password, decode_responses=True)
     last_redis = Redis(last_address, password=password, decode_responses=True)

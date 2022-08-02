@@ -76,9 +76,14 @@ async def test_discourse(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME, FIRST_DISCOURSE_APP_NAME, POSTGRESQL_APP_NAME],
         status="active",
-        timeout=2000,  # Discourse takes a longer time to become active (a lot of setup).
+        timeout=3000,  # Discourse takes a longer time to become active (a lot of setup).
     )
 
+
+@pytest.mark.order(3)
+@pytest.mark.redis_tests
+async def test_discourse_request(ops_test: OpsTest):
+    """Try to connect to discourse after the bundle is deployed."""
     discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME)
     url = f"http://{discourse_ip}:3000/site.json"
     response = urlopen(url)
@@ -86,6 +91,7 @@ async def test_discourse(ops_test: OpsTest):
     assert response.status == 200
 
 
+@pytest.mark.order(4)
 @pytest.mark.redis_tests
 async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
     """Test the second Discourse charm."""
