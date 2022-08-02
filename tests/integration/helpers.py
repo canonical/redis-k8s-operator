@@ -69,11 +69,11 @@ async def change_config(ops_test: OpsTest, values: dict) -> None:
     await ops_test.model.applications[APP_NAME].set_config(values)
 
 
-async def get_address(ops_test: OpsTest, unit_num=0) -> str:
+async def get_address(ops_test: OpsTest, app_name=APP_NAME, unit_num=0) -> str:
     """Get the address for a unit."""
     logger.info(f"Getting the address for unit {unit_num}")
     status = await ops_test.model.get_status()  # noqa: F821
-    address = status["applications"][APP_NAME]["units"][f"{APP_NAME}/{unit_num}"]["address"]
+    address = status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
     return address
 
 

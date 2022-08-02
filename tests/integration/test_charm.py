@@ -216,8 +216,8 @@ async def test_replication(ops_test: OpsTest):
     logger.info("Unit mapping: {}".format(unit_map))
 
     leader_num = get_unit_number(unit_map["leader"])
-    leader_address = await get_address(ops_test, leader_num)
-    password = await get_password(ops_test, leader_num)
+    leader_address = await get_address(ops_test, unit_num=leader_num)
+    password = await get_password(ops_test, unit_num=leader_num)
 
     leader_client = Redis(leader_address, password=password)
     leader_client.set("testKey", "myValue")
@@ -225,7 +225,7 @@ async def test_replication(ops_test: OpsTest):
     # Check that the initial key has been replicated across units
     for unit_name in unit_map["non_leader"]:
         unit_num = get_unit_number(unit_name)
-        address = await get_address(ops_test, unit_num)
+        address = await get_address(ops_test, unit_num=unit_num)
 
         client = Redis(address, password=password)
         assert client.get("testKey") == b"myValue"
@@ -241,7 +241,7 @@ async def test_sentinels_expected(ops_test: OpsTest):
     """Test sentinel connection and expected number of sentinels."""
     unit_map = await get_unit_map(ops_test)
     leader_num = get_unit_number(unit_map["leader"])
-    address = await get_address(ops_test, leader_num)
+    address = await get_address(ops_test, unit_num=leader_num)
     # Use action to get admin password
     password = await get_sentinel_password(ops_test)
     logger.info("retrieved sentinel password for %s: %s", APP_NAME, password)
@@ -260,7 +260,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
     logger.info("Unit mapping: {}".format(unit_map))
 
     leader_num = get_unit_number(unit_map["leader"])
-    leader_address = await get_address(ops_test, leader_num)
+    leader_address = await get_address(ops_test, unit_num=leader_num)
     password = await get_password(ops_test, leader_num)
 
     # Set some key on the master replica.
@@ -317,8 +317,8 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
     # has NUM_UNITS + 1 units. Last unit will be application-name/3
     last_unit = NUM_UNITS
 
-    leader_address = await get_address(ops_test, get_unit_number(unit_map["leader"]))
-    last_address = await get_address(ops_test, last_unit)
+    leader_address = await get_address(ops_test, unit_num=get_unit_number(unit_map["leader"]))
+    last_address = await get_address(ops_test, unit_num=last_unit)
     password = await get_password(ops_test, 0)
     sentinel_password = await get_sentinel_password(ops_test, 0)
 
@@ -348,7 +348,7 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
 
     # Check that the initial key is still replicated across units
     for i in range(NUM_UNITS):
-        address = await get_address(ops_test, i)
+        address = await get_address(ops_test, unit_num=i)
         client = Redis(address, password=password)
         assert client.get("testKey") == b"myValue"
         client.close()

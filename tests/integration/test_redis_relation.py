@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+from urllib.request import urlopen
 
 import pytest as pytest
 from pytest_operator.plugin import OpsTest
@@ -78,11 +79,11 @@ async def test_discourse(ops_test: OpsTest):
         timeout=2000,  # Discourse takes a longer time to become active (a lot of setup).
     )
 
+    discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME)
+    url = f"http://{discourse_ip}:3000/site.json"
+    response = urlopen(url)
 
-@pytest.mark.order(3)
-@pytest.mark.redis_tests
-async def test_keys_replicated(ops_test: OpsTest):
-    """"""
+    assert response.status == 200
 
 
 @pytest.mark.redis_tests
@@ -91,7 +92,7 @@ async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
     unit_map = await get_unit_map(ops_test)
 
     # Get the Redis instance IP address.
-    redis_host = await get_address(ops_test, get_unit_number(unit_map["leader"]))
+    redis_host = await get_address(ops_test, unit_num=get_unit_number(unit_map["leader"]))
 
     # Deploy Discourse and wait for it to be blocked waiting for database relation.
     await ops_test.model.deploy(
