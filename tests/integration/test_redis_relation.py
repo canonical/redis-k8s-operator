@@ -4,13 +4,17 @@
 
 import asyncio
 import logging
-from urllib.request import urlopen
 
 import pytest as pytest
 from pytest_operator.plugin import OpsTest
 
 from tests.helpers import APP_NAME, METADATA, NUM_UNITS
-from tests.integration.helpers import get_address, get_unit_map, get_unit_number
+from tests.integration.helpers import (
+    get_address,
+    get_unit_map,
+    get_unit_number,
+    query_url,
+)
 
 FIRST_DISCOURSE_APP_NAME = "discourse-k8s"
 SECOND_DISCOURSE_APP_NAME = "discourse-charmers-discourse-k8s"
@@ -74,18 +78,17 @@ async def test_discourse(ops_test: OpsTest):
     # Test the first Discourse charm.
     # Add both relations to Discourse (PostgreSQL and Redis)
     # and wait for it to be ready.
-    await ops_test.model.add_relation(
-        APP_NAME,
-        FIRST_DISCOURSE_APP_NAME,
-    )
-    await ops_test.model.add_relation(
-        f"{POSTGRESQL_APP_NAME}:db-admin",
-        FIRST_DISCOURSE_APP_NAME,
-    )
+    await ops_test.model.add_relation(APP_NAME, FIRST_DISCOURSE_APP_NAME)
+    await ops_test.model.add_relation(f"{POSTGRESQL_APP_NAME}:db-admin", FIRST_DISCOURSE_APP_NAME)
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME, FIRST_DISCOURSE_APP_NAME, POSTGRESQL_APP_NAME],
         status="active",
+        idle_period=30,
         timeout=3000,  # Discourse takes a longer time to become active (a lot of setup).
+    )
+
+    assert (
+        ops_test.model.applications[FIRST_DISCOURSE_APP_NAME].units[0].workload_status == "active"
     )
 
 
@@ -95,7 +98,8 @@ async def test_discourse_request(ops_test: OpsTest):
     """Try to connect to discourse after the bundle is deployed."""
     discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME)
     url = f"http://{discourse_ip}:3000/site.json"
-    response = urlopen(url)
+    response = query_url(url)
+
     assert response.status == 200
 
 

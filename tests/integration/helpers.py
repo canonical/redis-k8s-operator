@@ -4,8 +4,10 @@
 
 """Helpers for integration tests."""
 import logging
+from urllib.request import urlopen
 
 from pytest_operator.plugin import OpsTest
+from tenacity import before_log, retry, stop_after_attempt, wait_fixed
 
 from tests.helpers import APP_NAME
 
@@ -103,3 +105,17 @@ def get_unit_number(unit_name: str) -> str:
     Unit names look like `application-name/0`
     """
     return unit_name.split("/")[1]
+
+
+@retry(
+    stop=stop_after_attempt(15),
+    wait=wait_fixed(20),
+    reraise=True,
+    before=before_log(logger, logging.DEBUG),
+)
+def query_url(url: str):
+    """Connect to a url and return the result."""
+    logger.info("Trying to connect to: {}".format(url))
+    response = urlopen(url)
+
+    return response
