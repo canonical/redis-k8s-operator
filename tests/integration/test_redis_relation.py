@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.order(1)
 @pytest.mark.redis_tests
+@pytest.mark.skip_if_deployed
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test: OpsTest):
     """Build the charm-under-test and deploy it.
@@ -51,11 +52,19 @@ async def test_build_and_deploy(ops_test: OpsTest):
             ops_test.model.deploy(POSTGRESQL_APP_NAME, application_name=POSTGRESQL_APP_NAME),
         )
         await ops_test.model.wait_for_idle(
-            apps=[APP_NAME, POSTGRESQL_APP_NAME], status="active", timeout=1000
+            apps=[APP_NAME, POSTGRESQL_APP_NAME], status="active", timeout=3000
         )
         # Discourse becomes blocked waiting for relations.
         await ops_test.model.wait_for_idle(
-            apps=[FIRST_DISCOURSE_APP_NAME], status="blocked", timeout=1000
+            apps=[FIRST_DISCOURSE_APP_NAME], status="blocked", timeout=3000
+        )
+
+        assert (
+            ops_test.model.applications[FIRST_DISCOURSE_APP_NAME].units[0].workload_status
+            == "blocked"
+        )
+        assert (
+            ops_test.model.applications[POSTGRESQL_APP_NAME].units[0].workload_status == "active"
         )
 
 
@@ -87,7 +96,6 @@ async def test_discourse_request(ops_test: OpsTest):
     discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME)
     url = f"http://{discourse_ip}:3000/site.json"
     response = urlopen(url)
-
     assert response.status == 200
 
 
@@ -114,7 +122,7 @@ async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
     )
     # Discourse becomes blocked waiting for PostgreSQL relation.
     await ops_test.model.wait_for_idle(
-        apps=[SECOND_DISCOURSE_APP_NAME], status="blocked", timeout=1000
+        apps=[SECOND_DISCOURSE_APP_NAME], status="blocked", timeout=3000
     )
 
     # Relate PostgreSQL and Discourse, waiting for Discourse to be ready.
@@ -125,5 +133,5 @@ async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(
         apps=[POSTGRESQL_APP_NAME, SECOND_DISCOURSE_APP_NAME, APP_NAME],
         status="active",
-        timeout=2000,  # Discourse takes a longer time to become active (a lot of setup).
+        timeout=3000,  # Discourse takes a longer time to become active (a lot of setup).
     )
