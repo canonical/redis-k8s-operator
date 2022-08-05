@@ -4,6 +4,7 @@
 
 """Helpers for integration tests."""
 import logging
+import subprocess
 from urllib.request import urlopen
 
 from pytest_operator.plugin import OpsTest
@@ -99,6 +100,25 @@ async def get_unit_map(ops_test: OpsTest) -> dict:
     return unit_map
 
 
+def check_application_status(ops_test: OpsTest, app_name: str) -> str:
+    """Return the application status for an app name."""
+    model_name = ops_test.model.info.name
+    proc = subprocess.check_output(f"juju status --model={model_name}".split())
+    proc = proc.decode("utf-8")
+
+    statuses = {"active", "maintenance", "waiting", "blocked"}
+    for line in proc.splitlines():
+        parts = line.split()
+        # first line with app name will have application status
+        if parts and parts[0] == app_name:
+            # NOTE: intersects possible statuses with the list of values:
+            # this is done because sometimes version number exists and
+            # sometimes it doesn't on juju status output
+            find_status = list(statuses & set(parts))
+            if find_status:
+                return find_status[0]
+
+
 def get_unit_number(unit_name: str) -> str:
     """Get the unit number from it's complete name.
 
@@ -108,8 +128,8 @@ def get_unit_number(unit_name: str) -> str:
 
 
 @retry(
-    stop=stop_after_attempt(15),
-    wait=wait_fixed(20),
+    stop=stop_after_attempt(3),
+    wait=wait_fixed(5),
     reraise=True,
     before=before_log(logger, logging.DEBUG),
 )

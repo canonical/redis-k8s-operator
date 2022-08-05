@@ -10,6 +10,7 @@ from pytest_operator.plugin import OpsTest
 
 from tests.helpers import APP_NAME, METADATA, NUM_UNITS
 from tests.integration.helpers import (
+    check_application_status,
     get_address,
     get_unit_map,
     get_unit_number,
@@ -63,32 +64,37 @@ async def test_build_and_deploy(ops_test: OpsTest):
             apps=[FIRST_DISCOURSE_APP_NAME], status="blocked", timeout=3000
         )
 
-        assert (
-            ops_test.model.applications[FIRST_DISCOURSE_APP_NAME].units[0].workload_status
-            == "blocked"
-        )
-        assert (
-            ops_test.model.applications[POSTGRESQL_APP_NAME].units[0].workload_status == "active"
-        )
+    assert (
+        ops_test.model.applications[FIRST_DISCOURSE_APP_NAME].units[0].workload_status == "blocked"
+    )
+    assert ops_test.model.applications[POSTGRESQL_APP_NAME].units[0].workload_status == "active"
 
 
 @pytest.mark.order(2)
 @pytest.mark.redis_tests
-async def test_discourse(ops_test: OpsTest):
+@pytest.mark.skip_if_deployed
+async def test_discourse_relation(ops_test: OpsTest):
     # Test the first Discourse charm.
     # Add both relations to Discourse (PostgreSQL and Redis)
     # and wait for it to be ready.
-    await ops_test.model.add_relation(APP_NAME, FIRST_DISCOURSE_APP_NAME)
     await ops_test.model.add_relation(f"{POSTGRESQL_APP_NAME}:db-admin", FIRST_DISCOURSE_APP_NAME)
+    # Wait until discourse handles all relation events related to postgresql
+    await ops_test.model.add_relation(APP_NAME, FIRST_DISCOURSE_APP_NAME)
+
+    # This won't work: model.applications[app_name].units[0].workload_status returns wrong status
+    """
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME, FIRST_DISCOURSE_APP_NAME, POSTGRESQL_APP_NAME],
         status="active",
         idle_period=30,
         timeout=3000,  # Discourse takes a longer time to become active (a lot of setup).
     )
+    """
 
-    assert (
-        ops_test.model.applications[FIRST_DISCOURSE_APP_NAME].units[0].workload_status == "active"
+    await ops_test.model.block_until(
+        lambda: check_application_status(ops_test, "discourse-k8s") == "active",
+        timeout=600,
+        wait_period=5,
     )
 
 
