@@ -144,6 +144,7 @@ class RedisK8sCharm(CharmBase):
             return
 
         self._update_layer()
+        self.sentinel._update_sentinel_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
         if not isinstance(self.unit.status, ActiveStatus):
