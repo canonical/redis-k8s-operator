@@ -103,11 +103,15 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
 
     logger.info("scaling charm %s to 0 units", APP_NAME)
     await ops_test.model.applications[APP_NAME].scale(scale=0)
-    await ops_test.model.block_until(lambda: len(ops_test.model.applications[APP_NAME].units) == 0)
+    await ops_test.model.block_until(
+        lambda: len(ops_test.model.applications[APP_NAME].units) == 0, timeout=600
+    )
 
     logger.info("scaling charm %s to 1 units", APP_NAME)
     await ops_test.model.applications[APP_NAME].scale(scale=1)
-    await ops_test.model.block_until(lambda: len(ops_test.model.applications[APP_NAME].units) > 0)
+    await ops_test.model.block_until(
+        lambda: len(ops_test.model.applications[APP_NAME].units) > 0, timeout=600
+    )
 
     # Wait for model to settle
     await ops_test.model.wait_for_idle(
@@ -131,7 +135,8 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
     logger.info("scaling charm back to %s units", NUM_UNITS)
     await ops_test.model.applications[APP_NAME].scale(scale=NUM_UNITS)
     await ops_test.model.block_until(
-        lambda: len(ops_test.model.applications[APP_NAME].units) == NUM_UNITS
+        lambda: len(ops_test.model.applications[APP_NAME].units) == NUM_UNITS,
+        timeout=300,
     )
     # Wait for model to settle
     await ops_test.model.wait_for_idle(
@@ -277,7 +282,8 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
 
     await ops_test.model.applications[APP_NAME].scale(scale=NUM_UNITS + 1)
     await ops_test.model.block_until(
-        lambda: len(ops_test.model.applications[APP_NAME].units) == NUM_UNITS + 1
+        lambda: len(ops_test.model.applications[APP_NAME].units) == NUM_UNITS + 1,
+        timeout=300,
     )
 
     # Wait for model to settle
@@ -337,7 +343,8 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
     time.sleep(3)
 
     await ops_test.model.block_until(
-        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
+        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}"),
+        timeout=60,
     )
     assert last_redis.execute_command("ROLE")[0] == "master"
 

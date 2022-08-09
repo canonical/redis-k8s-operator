@@ -99,11 +99,6 @@ class RedisProvides(Object):
 
     def _on_relation_changed(self, event):
         """Handle the relation changed event."""
-        """
-        if not self.model.unit.is_leader():
-            logger.debug("Relation changes ignored by non-leader")
-            return
-        """
         event.relation.data[self.model.unit]['hostname'] = self._get_master_ip()
         event.relation.data[self.model.unit]['port'] = str(self._port)
         # The reactive Redis charm also exposes 'password'. When tackling

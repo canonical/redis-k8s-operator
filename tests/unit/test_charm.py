@@ -152,10 +152,8 @@ class TestCharm(TestCase):
         self.harness.update_config()
         mock_container.add_layer.assert_not_called()
         mock_container.restart.assert_not_called()
-        self.assertEqual(
-            self.harness.charm.unit.status,
-            WaitingStatus("Waiting for Pebble in sentinel container"),
-        )
+        self.assertTrue(isinstance(self.harness.charm.unit.status, WaitingStatus))
+
         self.assertEqual(self.harness.charm.app.status, UnknownStatus())
         self.assertEqual(self.harness.get_workload_version(), None)
         # TODO - test for the event being deferred
