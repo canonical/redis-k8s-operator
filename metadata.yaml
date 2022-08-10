@@ -1,6 +1,6 @@
-# This file is part of the Redis k8s Charm for Juju.
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
+
 name: redis-k8s
 display-name: Redis
 docs: https://discourse.charmhub.io/t/redis-docs-index/4571
@@ -20,27 +20,46 @@ summary: >
   of on-disk persistence, and provides high availability via Redis Sentinel and
   automatic partitioning with Redis Cluster.
 
-  This charm supports Redis 5 in Kubernetes environments, using k8s services
+  This charm supports Redis in Kubernetes environments, using k8s services
   for load balancing. This supports a simple Redis topology. Although multiple
   units are allowed, replication and clustering are not supported for the moment.
 maintainers:
   - Eduardo Mucelli R. Oliveira <eduardo.mucelli@canonical.com>
-min-juju-version: 2.8.7
-series:
-  - kubernetes
-deployment:
-  min-version: '1.16'
-  type: stateful
-  service: loadbalancer
+  - Raul Zamora Martinez <raul.zamora@canonical.com>
+
 provides:
   redis:
     interface: redis
-storage:
-  database:
-    type: filesystem
-    location: /var/opt/redis
+
+containers:
+  redis:
+    resource: redis-image
+    mounts:
+      - storage: database
+        location: /var/lib/redis
+  sentinel:
+    resource: redis-image
+
 resources:
   redis-image:
     type: oci-image
     description: ubuntu lts docker image for redis
-    upstream-source: 'ubuntu/redis'
+    upstream: redis:6.2
+  cert-file:
+    type: file
+    filename: redis.crt
+  key-file:
+    type: file
+    filename: redis.key
+  ca-cert-file:
+    type: file
+    filename: ca.crt
+
+storage:
+  database:
+    type: filesystem
+    location: /var/lib/redis
+
+peers:
+  redis-peers:
+    interface: redis-peers

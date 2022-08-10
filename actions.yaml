@@ -1,0 +1,11 @@
+# Copyright 2022 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+check-service:
+  description: Check if the redis service is up
+
+get-initial-admin-password:
+  description: Returns the randomly generated password for Redis at charm deployment
+
+get-sentinel-password:
+  description: Returns the randomly generated password for Sentinel at charm deployment

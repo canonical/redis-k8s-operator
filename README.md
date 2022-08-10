@@ -8,16 +8,11 @@ The [Redis](https://www.redis.io/) operator provides in-memory data structure
 store, used as a database, cache, and message broker. This repository contains a
 Juju Charm for deploying Redis on Kubernetes clusters.
 
-This charm is in development, and it supports a simple Redis topology. Although multiple
-units are allowed, replication and clustering are not supported for the moment. You can
-track the development in [this](https://github.com/canonical/redis-operator/issues/2) 
-and [this](https://github.com/canonical/redis-operator/issues/3) issues, respectively.
-
 # Usage
 
 To deploy this charm using Juju 2.9.0 or later, run:
 
-    juju deploy redis-k8s
+    juju deploy redis-k8s --channel edge
 
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:
@@ -26,9 +21,48 @@ To check it you run:
 
 To discover the IP Redis is running behind. The output will have lines like:
 
-    Unit           Workload    Agent  Address       Ports     Message
-    redis-k8s/20   active      idle   10.1.168.69   6379/TCP  Pod is ready.
+    Unit          Workload  Agent  Address     Ports  Message
+    redis-k8s/0*  active    idle   10.1.31.23
+
+To retrieve the password to access the database, use the `get-initial-admin-password` action:
+
+    juju run-action redis-k8s/0 get-initial-admin-password --wait
 
 Then, from your local machine, you can:
 
-    redis-cli -h 10.1.168.69 -p 6379
+    redis-cli -h 10.1.31.23 -a <password> PING
+
+## Enabling TLS encryption
+
+The charm has [Redis TLS support](https://redis.io/docs/manual/security/encryption/). Three resources are needed:
+
+- ca-cert-file: CA certificate
+- cert-file: X.509 certificate
+- key-file: private key
+
+User provided files are accepted. Alternatively, the testing script located on `tests/gen-test-certs.sh` can be used to generate the certificates:
+
+    # The script will create tests/tls/ folders and place the files there.
+    ./gen-tesst-certs.sh
+
+To attach generated files as resources:
+
+    juju attach-resource redis-k8s ca-cert-file=tests/tls/ca.crt
+    juju attach-resource redis-k8s cert-file=tests/tls/redis.crt
+    juju attach-resource redis-k8s key-file=tests/tls/redis.key
+
+After attaching the files, enable TLS with:
+
+    juju config redis-k8s enable-tls=true
+
+Once the application is on an `active|idle` status, you can test connection from your local machine:
+
+    redis-cli -h <host> -a <password> --tls --cacert ./tests/tls/ca.crt PING
+
+# Docs
+
+Docs can be found at https://charmhub.io/redis-k8s/docs?channel=edge
+
+# Libraries
+
+Docs on included libraries for the redis relation can be found at https://charmhub.io/redis-k8s/libraries/redis?channel=edge

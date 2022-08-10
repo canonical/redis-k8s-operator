@@ -11,8 +11,4 @@ bases:
         channel: "20.04"
 parts:
   charm:
-    build-packages:
-      - git
-    charm-python-packages:
-      - setuptools == 57.5.0
-
+    charm-python-packages: [setuptools]
