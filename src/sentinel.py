@@ -179,7 +179,7 @@ class Sentinel(Object):
                 if response.startswith("OK"):
                     logger.info("Own sentinel instance can reach quorum")
                     majority = True
-            except ResponseError as e:
+            except (ConnectionError, ResponseError) as e:
                 logger.warning("No quorum can be reached: {}".format(e))
 
         return majority
