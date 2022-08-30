@@ -236,7 +236,7 @@ async def test_replication(ops_test: OpsTest):
         assert client.get("testKey") == b"myValue"
         client.close()
 
-    # Reset database satus
+    # Reset database status
     leader_client.delete("testKey")
     leader_client.close()
 
