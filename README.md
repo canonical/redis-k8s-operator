@@ -14,6 +14,11 @@ To deploy this charm using Juju 2.9.0 or later, run:
 
     juju deploy redis-k8s --channel edge
 
+This charms supports replication, to deploy several instaces of Redis the option
+`-n` can be added:
+
+    juju deploy redis-k8s --channel edge -n <num-units>
+
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:
 
