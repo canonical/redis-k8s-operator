@@ -44,7 +44,7 @@ resources:
   redis-image:
     type: oci-image
     description: ubuntu lts docker image for redis
-    upstream: redis:6.2
+    upstream: dataplatformoci/redis:7.0-22.04_edge
   cert-file:
     type: file
     filename: redis.crt
