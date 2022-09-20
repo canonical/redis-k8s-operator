@@ -222,6 +222,7 @@ class TestCharm(TestCase):
         extra_flags = [
             "--bind 0.0.0.0",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
+            "--protected-mode no",
         ]
         expected_plan = {
             "services": {
