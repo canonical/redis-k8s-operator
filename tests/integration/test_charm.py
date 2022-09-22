@@ -279,6 +279,13 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
     # Trigger a master failover
     sentinel = Redis(leader_address, password=sentinel_password, port=26379, decode_responses=True)
     sentinel.execute_command(f"SENTINEL failover {APP_NAME}")
+    # Give time so sentinel updates information of failover
+    time.sleep(10)
+
+    await ops_test.model.block_until(
+        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}"),
+        timeout=60,
+    )
 
     await ops_test.model.applications[APP_NAME].scale(scale=NUM_UNITS + 1)
     await ops_test.model.block_until(
@@ -341,7 +348,7 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
     # Failover so the last unit becomes master
     sentinel.execute_command(f"SENTINEL FAILOVER {APP_NAME}")
     # Give time so sentinel updates information of failover
-    time.sleep(3)
+    time.sleep(10)
 
     await ops_test.model.block_until(
         lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}"),
@@ -352,7 +359,6 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
 
     # SCALE DOWN #
     await scale(ops_test, scale=NUM_UNITS)
-    time.sleep(140)  # Sentinel takes time to propagate the reset command to all instances
 
     # Check that the initial key is still replicated across units
     for i in range(NUM_UNITS):
