@@ -202,20 +202,20 @@ class RedisK8sCharm(CharmBase):
         self._update_quorum()
 
         try:
-            self._sentinel_failover(event.departing_unit.name)
-        except RedisError as e:
-            msg = f"Error on failover: {e}"
-            logger.error(msg)
-            self.unit.status == BlockedStatus(msg)
-            return
-
-        try:
             self._is_failover_finished()
         except (RedisFailoverCheckError, RedisFailoverInProgressError):
             msg = "Failover didn't finish, deferring"
             logger.info(msg)
             self.unit.status == WaitingStatus(msg)
             event.defer()
+            return
+
+        try:
+            self._sentinel_failover(event.departing_unit.name)
+        except RedisError as e:
+            msg = f"Error on failover: {e}"
+            logger.error(msg)
+            self.unit.status == BlockedStatus(msg)
             return
 
         logger.info("Resetting sentinel")

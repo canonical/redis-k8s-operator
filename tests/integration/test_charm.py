@@ -183,7 +183,7 @@ async def test_enable_tls(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME],
         status="active",
-        idle_period=30,
+        idle_period=60,
         raise_on_blocked=False,
         raise_on_error=False,
         timeout=1000,
@@ -337,6 +337,7 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
 
     # Make the added unit a priority during failover
     last_redis.execute_command("CONFIG SET replica-priority 1")
+    time.sleep(1)
     # Failover so the last unit becomes master
     sentinel.execute_command(f"SENTINEL FAILOVER {APP_NAME}")
     # Give time so sentinel updates information of failover
@@ -347,11 +348,11 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
         timeout=60,
     )
     assert last_redis.execute_command("ROLE")[0] == "master"
-
     last_redis.close()
 
     # SCALE DOWN #
     await scale(ops_test, scale=NUM_UNITS)
+    time.sleep(140)  # Sentinel takes time to propagate the reset command to all instances
 
     # Check that the initial key is still replicated across units
     for i in range(NUM_UNITS):
