@@ -14,6 +14,15 @@ To deploy this charm using Juju 2.9.0 or later, run:
 
     juju deploy redis-k8s --channel edge
 
+The operator supports replication, to deploy several instances of Redis the option
+`-n` can be added. The recommended replication size should be at least 3 units:
+
+    juju deploy redis-k8s --channel edge -n <num-units>
+
+You can also add units to a deployment with:
+
+    juju add-unit redis-k8s  -n <num-units>
+
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:
 
@@ -32,9 +41,25 @@ Then, from your local machine, you can:
 
     redis-cli -h 10.1.31.23 -a <password> PING
 
+## HA Setup
+
+The operator supports high availability through [Redis Sentinel](https://redis.io/docs/manual/sentinel/).
+After being deployed, two containers run on the pod, one with the
+redis service, and another one with the sentinel service. Sentinel
+runs on its default port, 26379.
+
+A different password is used to setup sentinel. To retrieve it, use
+`get-sentinel-password` action:
+
+    juju run-action redis-k8s/0 get-sentinel-password --wait
+
+From a local machine, you can:
+
+    redis-cli -h 10.1.31.23 -p 26379 -a <sentinel-password> PING
+
 ## Enabling TLS encryption
 
-The charm has [Redis TLS support](https://redis.io/docs/manual/security/encryption/). Three resources are needed:
+The operator has [Redis TLS support](https://redis.io/docs/manual/security/encryption/). Three resources are needed:
 
 - ca-cert-file: CA certificate
 - cert-file: X.509 certificate
