@@ -19,6 +19,10 @@ The operator supports replication, to deploy several instances of Redis the opti
 
     juju deploy redis-k8s --channel edge -n <num-units>
 
+You can also add units to a deployment with:
+
+    juju add-unit redis-k8s  -n <num-units>
+
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:
 
