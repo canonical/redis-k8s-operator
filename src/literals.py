@@ -6,6 +6,7 @@
 
 WAITING_MESSAGE = "Waiting for Redis..."
 PEER = "redis-peers"
+REDIS_REL_NAME = "redis"
 PEER_PASSWORD_KEY = "redis-password"
 SENTINEL_PASSWORD_KEY = "sentinel-password"
 LEADER_HOST_KEY = "leader-host"

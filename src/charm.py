@@ -28,6 +28,7 @@ from literals import (
     PEER,
     PEER_PASSWORD_KEY,
     REDIS_PORT,
+    REDIS_REL_NAME,
     SENTINEL_PASSWORD_KEY,
     SOCKET_TIMEOUT,
     WAITING_MESSAGE,
@@ -86,13 +87,27 @@ class RedisK8sCharm(CharmBase):
             event.defer()
             return
 
-    def _upgrade_charm(self, _) -> None:
+    def _upgrade_charm(self, event) -> None:
         """Handle the upgrade_charm event.
 
         Tries to store the certificates on the redis container, as new `juju attach-resource`
         will trigger this event.
         """
         self._store_certificates()
+
+        try:
+            self._is_failover_finished()
+        except (RedisFailoverCheckError, RedisFailoverInProgressError):
+            logger.info("Failover didn't finish or couldn't be checked, deferring")
+            event.defer()
+            return
+
+        if self.unit.is_leader():
+            self._update_application_master()
+
+        relation = self.model.get_relation(relation_name=REDIS_REL_NAME)
+        if relation:
+            relation.data[self.model.unit]["hostname"] = socket.gethostbyname("")
 
     def _leader_elected(self, event) -> None:
         """Handle the leader_elected event.
@@ -166,6 +181,7 @@ class RedisK8sCharm(CharmBase):
     def _peer_relation_changed(self, event):
         """Handle relation for joining units."""
         if not self._check_master():
+            logger.debug(f"Unit {self.unit.name} doesn't agree on tracked master")
             if self.unit.is_leader():
                 # Update who the current master is
                 self._update_application_master()
@@ -174,6 +190,10 @@ class RedisK8sCharm(CharmBase):
         # reconfigured to remove auth
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             self._update_layer()
+
+        relation = self.model.get_relation(relation_name=REDIS_REL_NAME)
+        if relation:
+            relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.current_master)
 
         if not (self.unit.is_leader() and event.unit):
             return
@@ -544,6 +564,7 @@ class RedisK8sCharm(CharmBase):
             logger.warning("Could not update current master")
             return
 
+        logger.info(f"Unit {self.unit.name} updating master info to {info['ip']}")
         self._peers.data[self.app][LEADER_HOST_KEY] = info["ip"]
 
     def _sentinel_failover(self, departing_unit_name: str) -> None:
