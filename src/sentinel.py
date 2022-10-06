@@ -147,7 +147,7 @@ class Sentinel(Object):
             group="redis",
         )
 
-    def get_master_info(self, host="localhost") -> Optional[dict]:
+    def get_master_info(self, host="0.0.0.0") -> Optional[dict]:
         """Connect to sentinel and return the current master."""
         with self.sentinel_client(host) as sentinel:
             try:

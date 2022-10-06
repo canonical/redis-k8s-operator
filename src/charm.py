@@ -95,19 +95,24 @@ class RedisK8sCharm(CharmBase):
         """
         self._store_certificates()
 
+        # Pick a different unit to connect to sentinel
+        k8s_host = self._k8s_hostname(name=list(self._peers.units)[0].name)
         try:
-            self._is_failover_finished()
+            self._is_failover_finished(host=k8s_host)
         except (RedisFailoverCheckError, RedisFailoverInProgressError):
-            logger.info("Failover didn't finish or couldn't be checked, deferring")
+            logger.info("Failover didn't finish, deferring")
             event.defer()
             return
 
         if self.unit.is_leader():
-            self._update_application_master()
-
-        relation = self.model.get_relation(relation_name=REDIS_REL_NAME)
-        if relation:
-            relation.data[self.model.unit]["hostname"] = socket.gethostbyname("")
+            info = self.sentinel.get_master_info(host=k8s_host)
+            logger.debug(f"Master info: {info}")
+            logger.info(f"Unit {self.unit.name} updating master info to {info['ip']}")
+            self._peers.data[self.app][LEADER_HOST_KEY] = info["ip"]
+        else:
+            relation = self.model.get_relation(relation_name=REDIS_REL_NAME)
+            if relation:
+                self._peers.data[self.unit]["upgrading"] = "true"
 
     def _leader_elected(self, event) -> None:
         """Handle the leader_elected event.
@@ -181,7 +186,14 @@ class RedisK8sCharm(CharmBase):
     def _peer_relation_changed(self, event):
         """Handle relation for joining units."""
         if not self._check_master():
-            logger.debug(f"Unit {self.unit.name} doesn't agree on tracked master")
+            logger.error(f"Unit {self.unit.name} doesn't agree on tracked master")
+            try:
+                self._is_failover_finished()
+            except (RedisFailoverCheckError, RedisFailoverInProgressError):
+                logger.info("Failover didn't finish, deferring")
+                event.defer()
+                return
+
             if self.unit.is_leader():
                 # Update who the current master is
                 self._update_application_master()
@@ -194,6 +206,8 @@ class RedisK8sCharm(CharmBase):
         relation = self.model.get_relation(relation_name=REDIS_REL_NAME)
         if relation:
             relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.current_master)
+            if self._peers.data[self.unit].get("upgrading", "false") == "true":
+                self._peers.data[self.unit]["upgrading"] = ""
 
         if not (self.unit.is_leader() and event.unit):
             return
@@ -510,7 +524,7 @@ class RedisK8sCharm(CharmBase):
         """Create a DNS name for a Redis unit name.
 
         Args:
-            name: the Redis unit name, e.g. "redis-k8s-0".
+            name: the Redis unit name, e.g. "redis-k8s/0".
 
         Returns:
             A string representing the hostname of the Redis unit.
@@ -542,17 +556,16 @@ class RedisK8sCharm(CharmBase):
         finally:
             client.close()
 
-    def _check_master(self) -> bool:
-        """Connect to the current stored master and query role."""
-        with self._redis_client(hostname=self.current_master) as redis:
-            try:
-                result = redis.execute_command("ROLE")
-            except (ConnectionError, TimeoutError) as e:
-                logger.warning("Error trying to check master: {}".format(e))
-                return False
+    def _check_master(self, host="0.0.0.0") -> bool:
+        """Check if stored master is the same as sentinel tracked.
+        
+        Returns:
+            host: string to connect to sentinel
+        """
+        info = self.sentinel.get_master_info(host=host)
 
-            if result[0] == "master":
-                return True
+        if (info["ip"] == self.current_master) and ("s_down" not in info["flags"]):
+            return True
 
         return False
 
@@ -586,15 +599,19 @@ class RedisK8sCharm(CharmBase):
         reraise=True,
         before=before_log(logger, logging.DEBUG),
     )
-    def _is_failover_finished(self) -> None:
-        """Check if failover is still in progress."""
+    def _is_failover_finished(self, host="localhost") -> None:
+        """Check if failover is still in progress.
+        
+        Returns:
+            host: string to connect to sentinel.
+        """
         logger.warning("Checking if failover is finished.")
-        info = self.sentinel.get_master_info()
+        info = self.sentinel.get_master_info(host=host)
         if info is None:
             logger.warning("Could not check failover status")
             raise RedisFailoverCheckError
 
-        if "failover-state" in info:
+        if "failover_in_progress" in info["flags"]:
             logger.warning(
                 "Failover taking place. Current status: {}".format(info["failover-state"])
             )
