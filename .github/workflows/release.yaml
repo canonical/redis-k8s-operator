@@ -44,6 +44,9 @@ jobs:
 
   integration-test-general:
     name: Integration tests (general)
+    needs:
+      - lint
+      - unit-test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -56,8 +59,12 @@ jobs:
           bootstrap-options: "--agent-version 2.9.29"
       - name: Run integration tests
         run: tox -e integration
+
   integration-test-relation:
     name: Integration tests (relation)
+    needs:
+      - lint
+      - unit-test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
