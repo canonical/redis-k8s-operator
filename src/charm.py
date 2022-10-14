@@ -95,6 +95,11 @@ class RedisK8sCharm(CharmBase):
         """
         self._store_certificates()
 
+        # NOTE: This is the case of a single unit deployment. If that's the case, the charm
+        # doesn't need to check for failovers or figure out who the master is.
+        if not self._peers.units:
+            return
+
         # Pick a different unit to connect to sentinel
         k8s_host = self._k8s_hostname(name=list(self._peers.units)[0].name)
         try:
@@ -558,13 +563,14 @@ class RedisK8sCharm(CharmBase):
 
     def _check_master(self, host="0.0.0.0") -> bool:
         """Check if stored master is the same as sentinel tracked.
-        
+
         Returns:
             host: string to connect to sentinel
         """
         info = self.sentinel.get_master_info(host=host)
-
-        if (info["ip"] == self.current_master) and ("s_down" not in info["flags"]):
+        if info is None:
+            return False
+        elif (info["ip"] == self.current_master) and ("s_down" not in info["flags"]):
             return True
 
         return False
@@ -601,7 +607,7 @@ class RedisK8sCharm(CharmBase):
     )
     def _is_failover_finished(self, host="localhost") -> None:
         """Check if failover is still in progress.
-        
+
         Returns:
             host: string to connect to sentinel.
         """
