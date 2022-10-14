@@ -394,6 +394,15 @@ class TestCharm(TestCase):
         updated_data = self.harness.get_relation_data(rel.id, "redis-k8s")
         self.assertEqual(updated_data["leader-host"], "different-leader")
 
+        # Reset the application data to the initial state
+        self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
+
+        # Now check that a pod reschedule will also result in updated information
+        self.harness.charm.on.upgrade_charm.emit()
+
+        updated_data = self.harness.get_relation_data(rel.id, "redis-k8s")
+        self.assertEqual(updated_data["leader-host"], "different-leader")
+
     @mock.patch.object(Redis, "execute_command")
     def test_forced_failover_when_unit_departed_is_master(self, execute_command):
         # Custom responses to Redis `execute_command` call
