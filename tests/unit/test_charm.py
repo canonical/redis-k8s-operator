@@ -177,7 +177,8 @@ class TestCharm(TestCase):
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
 
-    def test_password_on_leader_elected(self):
+    @mock.patch.object(RedisK8sCharm, "_is_failover_finished")
+    def test_password_on_leader_elected(self, _):
         # Assert that there is no password in the peer relation.
         self.assertFalse(self.harness.charm._get_password())
 
@@ -314,8 +315,13 @@ class TestCharm(TestCase):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
             mapping = {
-                "ROLE": ["master"],
                 f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
+                f"SENTINEL MASTER {self.harness.charm._name}": [
+                    "ip",
+                    APPLICATION_DATA["leader-host"],
+                    "flags",
+                    "master",
+                ],
             }
             return mapping.get(value)
 
@@ -360,9 +366,13 @@ class TestCharm(TestCase):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
             mapping = {
-                "ROLE": ["non-master"],
                 f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
-                f"SENTINEL MASTER {self.harness.charm._name}": ["ip", "different-leader"],
+                f"SENTINEL MASTER {self.harness.charm._name}": [
+                    "ip",
+                    "different-leader",
+                    "flags",
+                    "s_down",
+                ],
             }
             return mapping.get(value)
 
@@ -384,16 +394,26 @@ class TestCharm(TestCase):
         updated_data = self.harness.get_relation_data(rel.id, "redis-k8s")
         self.assertEqual(updated_data["leader-host"], "different-leader")
 
+        # Reset the application data to the initial state
+        self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
+
+        # Now check that a pod reschedule will also result in updated information
+        self.harness.charm.on.upgrade_charm.emit()
+
+        updated_data = self.harness.get_relation_data(rel.id, "redis-k8s")
+        self.assertEqual(updated_data["leader-host"], "different-leader")
+
     @mock.patch.object(Redis, "execute_command")
     def test_forced_failover_when_unit_departed_is_master(self, execute_command):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
             mapping = {
-                "ROLE": ["non-master"],
                 f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
                 f"SENTINEL MASTER {self.harness.charm._name}": [
                     "ip",
                     self.harness.charm._k8s_hostname("redis-k8s/1"),
+                    "flags",
+                    "master",
                 ],
             }
             return mapping.get(value)
