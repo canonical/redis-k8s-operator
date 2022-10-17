@@ -147,6 +147,7 @@ async def test_same_password_after_scaling(ops_test: OpsTest):
     )
 
 
+@pytest.mark.skip  # TLS will not be implemented as resources in the future
 @pytest.mark.tls_tests
 async def test_blocked_if_no_certificates(ops_test: OpsTest):
     """Check the application status on TLS enable.
@@ -166,6 +167,7 @@ async def test_blocked_if_no_certificates(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", timeout=1000)
 
 
+@pytest.mark.skip  # TLS will not be implemented as resources in the future
 @pytest.mark.tls_tests
 async def test_enable_tls(ops_test: OpsTest):
     """Check adding TLS certificates and enabling them.

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from charms.redis_k8s.v0.redis import RedisProvides
-from ops.charm import ActionEvent, CharmBase
+from ops.charm import ActionEvent, CharmBase, UpgradeCharmEvent
 from ops.framework import EventBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
@@ -22,7 +22,6 @@ from redis import ConnectionError, Redis, TimeoutError
 from redis.exceptions import RedisError
 from tenacity import before_log, retry, stop_after_attempt, wait_fixed
 
-from exceptions import RedisFailoverCheckError, RedisFailoverInProgressError
 from literals import (
     LEADER_HOST_KEY,
     PEER,
@@ -87,10 +86,12 @@ class RedisK8sCharm(CharmBase):
             event.defer()
             return
 
-    def _upgrade_charm(self, event) -> None:
+    def _upgrade_charm(self, event: UpgradeCharmEvent) -> None:
         """Handle the upgrade_charm event.
 
-        Tries to store the certificates on the redis container, as new `juju attach-resource`
+        Check for failover status and update connection information for redis relation and
+        current_master.
+        Also tries to store the certificates on the redis container, as new `juju attach-resource`
         will trigger this event.
         """
         self._store_certificates()
@@ -102,13 +103,15 @@ class RedisK8sCharm(CharmBase):
 
         # Pick a different unit to connect to sentinel
         k8s_host = self._k8s_hostname(name=list(self._peers.units)[0].name)
-        try:
-            self._is_failover_finished(host=k8s_host)
-        except (RedisFailoverCheckError, RedisFailoverInProgressError):
+        if not self._is_failover_finished(host=k8s_host):
             logger.info("Failover didn't finish, deferring")
             event.defer()
             return
 
+        # NOTE: If unit is the leader, update application databag directly: peer_relation_changed
+        # will trigger for the rest of the units and they will update connection information. If
+        # unit is not a leader, add a key to the application databag so peer_relation_changed
+        # triggers for the leader unit and application databag is updated.
         if self.unit.is_leader():
             info = self.sentinel.get_master_info(host=k8s_host)
             logger.debug(f"Master info: {info}")
@@ -146,9 +149,7 @@ class RedisK8sCharm(CharmBase):
             # TODO extract to method shared with relation_departed
             self._update_application_master()
             self._update_quorum()
-            try:
-                self._is_failover_finished()
-            except (RedisFailoverCheckError, RedisFailoverInProgressError):
+            if not self._is_failover_finished():
                 logger.info("Failover didn't finish, deferring")
                 event.defer()
                 return
@@ -190,11 +191,9 @@ class RedisK8sCharm(CharmBase):
 
     def _peer_relation_changed(self, event):
         """Handle relation for joining units."""
-        if not self._check_master():
+        if not self._master_up_to_date():
             logger.error(f"Unit {self.unit.name} doesn't agree on tracked master")
-            try:
-                self._is_failover_finished()
-            except (RedisFailoverCheckError, RedisFailoverInProgressError):
+            if not self._is_failover_finished():
                 logger.info("Failover didn't finish, deferring")
                 event.defer()
                 return
@@ -232,7 +231,7 @@ class RedisK8sCharm(CharmBase):
         if not self.unit.is_leader():
             return
 
-        if not self._check_master():
+        if not self._master_up_to_date():
             self._update_application_master()
 
         # Quorum is updated beforehand, since removal of more units than current majority
@@ -240,9 +239,7 @@ class RedisK8sCharm(CharmBase):
         logger.info("Updating quorum")
         self._update_quorum()
 
-        try:
-            self._is_failover_finished()
-        except (RedisFailoverCheckError, RedisFailoverInProgressError):
+        if not self._is_failover_finished():
             msg = "Failover didn't finish, deferring"
             logger.info(msg)
             self.unit.status == WaitingStatus(msg)
@@ -561,7 +558,7 @@ class RedisK8sCharm(CharmBase):
         finally:
             client.close()
 
-    def _check_master(self, host="0.0.0.0") -> bool:
+    def _master_up_to_date(self, host="0.0.0.0") -> bool:
         """Check if stored master is the same as sentinel tracked.
 
         Returns:
@@ -605,23 +602,27 @@ class RedisK8sCharm(CharmBase):
         reraise=True,
         before=before_log(logger, logging.DEBUG),
     )
-    def _is_failover_finished(self, host="localhost") -> None:
+    def _is_failover_finished(self, host="localhost") -> bool:
         """Check if failover is still in progress.
 
-        Returns:
+        Args:
             host: string to connect to sentinel.
+
+        Returns:
+            True if failover is finished, false otherwise
         """
         logger.warning("Checking if failover is finished.")
         info = self.sentinel.get_master_info(host=host)
         if info is None:
             logger.warning("Could not check failover status")
-            raise RedisFailoverCheckError
-
+            return False
         if "failover_in_progress" in info["flags"]:
             logger.warning(
                 "Failover taking place. Current status: {}".format(info["failover-state"])
             )
-            raise RedisFailoverInProgressError
+            return False
+
+        return True
 
     def _update_quorum(self) -> None:
         """Connect to all Sentinels deployed to update the quorum."""
