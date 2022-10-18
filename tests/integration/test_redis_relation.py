@@ -24,8 +24,6 @@ POSTGRESQL_APP_NAME = "postgresql-k8s"
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.order(1)
-@pytest.mark.redis_tests
 @pytest.mark.skip_if_deployed
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test: OpsTest):
@@ -70,8 +68,6 @@ async def test_build_and_deploy(ops_test: OpsTest):
     assert ops_test.model.applications[POSTGRESQL_APP_NAME].units[0].workload_status == "active"
 
 
-@pytest.mark.order(2)
-@pytest.mark.redis_tests
 @pytest.mark.skip_if_deployed
 async def test_discourse_relation(ops_test: OpsTest):
     # Test the first Discourse charm.
@@ -98,8 +94,6 @@ async def test_discourse_relation(ops_test: OpsTest):
     )
 
 
-@pytest.mark.order(3)
-@pytest.mark.redis_tests
 async def test_discourse_request(ops_test: OpsTest):
     """Try to connect to discourse after the bundle is deployed."""
     discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME)
@@ -109,8 +103,6 @@ async def test_discourse_request(ops_test: OpsTest):
     assert response.status == 200
 
 
-@pytest.mark.order(4)
-@pytest.mark.redis_tests
 async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
     """Test the second Discourse charm."""
     unit_map = await get_unit_map(ops_test)
