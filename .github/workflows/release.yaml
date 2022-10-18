@@ -58,7 +58,7 @@ jobs:
           # This is needed until https://bugs.launchpad.net/juju/+bug/1977582 is fixed
           bootstrap-options: "--agent-version 2.9.29"
       - name: Run integration tests
-        run: tox -e integration
+        run: tox -e integration-charm
 
   integration-test-relation:
     name: Integration tests (relation)
@@ -78,6 +78,42 @@ jobs:
       - name: Run integration tests
         run: tox -e integration-relation
 
+  integration-test-password:
+    name: Integration tests (password)
+    needs:
+      - lint
+      - unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: microk8s
+          # This is needed until https://bugs.launchpad.net/juju/+bug/1977582 is fixed
+          bootstrap-options: "--agent-version 2.9.29"
+      - name: Run integration tests
+        run: tox -e integration-password
+
+  integration-test-scaling:
+    name: Integration tests (scaling)
+    needs:
+      - lint
+      - unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: microk8s
+          # This is needed until https://bugs.launchpad.net/juju/+bug/1977582 is fixed
+          bootstrap-options: "--agent-version 2.9.29"
+      - name: Run integration tests
+        run: tox -e integration-scaling
+
   release-to-charmhub:
     name: Release to CharmHub
     needs:
@@ -86,6 +122,8 @@ jobs:
       - unit-test
       - integration-test-general
       - integration-test-relation
+      - integration-test-scaling
+      - integration-test-password
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
