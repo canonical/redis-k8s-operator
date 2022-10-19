@@ -122,7 +122,7 @@ async def test_delete_non_primary_pod(ops_test: OpsTest):
     """Delete a pod that is not the Redis primary. Check that the deployment is healthy."""
     unit_map = await get_unit_map(ops_test=ops_test)
     non_leader = unit_map["non_leader"][0]
-    client = AsyncClient(namespace=ops_test.model_full_name)
+    client = AsyncClient(namespace=ops_test.model.info.name)
 
     # Delete a non-leader pod
     await client.delete(Pod, name=non_leader.replace("/", "-"))
@@ -148,7 +148,7 @@ async def test_delete_primary_pod(ops_test: OpsTest):
     """Delete the pod that is the Redis primary. Check that the deployment is healthy."""
     unit_map = await get_unit_map(ops_test=ops_test)
     leader = unit_map["leader"]
-    client = AsyncClient(namespace=ops_test.model_full_name)
+    client = AsyncClient(namespace=ops_test.model.info.name)
 
     # Delete a non-leader pod
     await client.delete(Pod, name=leader.replace("/", "-"))
