@@ -119,7 +119,11 @@ async def test_sentinels_expected(ops_test: OpsTest):
 
 
 async def test_delete_non_primary_pod(ops_test: OpsTest):
-    """Delete a pod that is not the Redis primary. Check that the deployment is healthy."""
+    """Delete a pod that is not the Redis primary.
+
+    Check that the pod joins the deployment correctly after it's restored automatically
+    by the StatefulSet.
+    """
     unit_map = await get_unit_map(ops_test=ops_test)
     non_leader = unit_map["non_leader"][0]
     client = AsyncClient(namespace=ops_test.model.info.name)
@@ -130,7 +134,7 @@ async def test_delete_non_primary_pod(ops_test: OpsTest):
 
     # Wait for `upgrade_charm` sequence
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=140
+        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=60
     )
 
     pod_num = get_unit_number(non_leader)
@@ -145,7 +149,11 @@ async def test_delete_non_primary_pod(ops_test: OpsTest):
 
 
 async def test_delete_primary_pod(ops_test: OpsTest):
-    """Delete the pod that is the Redis primary. Check that the deployment is healthy."""
+    """Delete the pod that is the Redis primary.
+
+    Check that the pod joins the deployment correctly after it's restored automatically
+    by the StatefulSet.
+    """
     unit_map = await get_unit_map(ops_test=ops_test)
     leader = unit_map["leader"]
     client = AsyncClient(namespace=ops_test.model.info.name)
@@ -156,7 +164,7 @@ async def test_delete_primary_pod(ops_test: OpsTest):
 
     # Wait for `upgrade_charm` sequence
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=140
+        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=60
     )
 
     # Get unit map again, in the case leader has changed
