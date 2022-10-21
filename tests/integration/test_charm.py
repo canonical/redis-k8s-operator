@@ -130,7 +130,7 @@ async def test_delete_non_primary_pod(ops_test: OpsTest):
 
     # Wait for `upgrade_charm` sequence
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=120
+        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=140
     )
 
     pod_num = get_unit_number(non_leader)
@@ -156,7 +156,7 @@ async def test_delete_primary_pod(ops_test: OpsTest):
 
     # Wait for `upgrade_charm` sequence
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=120
+        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=140
     )
 
     # Get unit map again, in the case leader has changed
