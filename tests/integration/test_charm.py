@@ -169,8 +169,8 @@ async def test_delete_primary_pod(ops_test: OpsTest):
 
     sentinel = Redis(pod_address, password=password, port=26379)
 
-    assert len(sentinel.sentinel_sentinels(service_name=APP_NAME)) == NUM_UNITS
-    assert len(sentinel.sentinel_slaves()) == NUM_UNITS - 1
+    assert len(sentinel.sentinel_sentinels(service_name=APP_NAME)) == NUM_UNITS - 1
+    assert len(sentinel.sentinel_slaves(service_name=APP_NAME)) == NUM_UNITS - 1
 
 
 @pytest.mark.skip  # TLS will not be implemented as resources in the future
