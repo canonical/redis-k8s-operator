@@ -6,6 +6,8 @@
 import logging
 
 import pytest
+from lightkube import AsyncClient
+from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
 from redis import Redis
 
@@ -75,7 +77,6 @@ async def test_application_is_up(ops_test: OpsTest):
     assert cli.ping()
 
 
-@pytest.mark.replication_tests
 async def test_replication(ops_test: OpsTest):
     """Check that non leader units are replicas."""
     unit_map = await get_unit_map(ops_test)
@@ -102,7 +103,6 @@ async def test_replication(ops_test: OpsTest):
     leader_client.close()
 
 
-@pytest.mark.replication_tests
 async def test_sentinels_expected(ops_test: OpsTest):
     """Test sentinel connection and expected number of sentinels."""
     unit_map = await get_unit_map(ops_test)
@@ -118,8 +118,70 @@ async def test_sentinels_expected(ops_test: OpsTest):
     assert sentinels_connected == NUM_UNITS
 
 
+async def test_delete_non_primary_pod(ops_test: OpsTest):
+    """Delete a pod that is not the Redis primary.
+
+    Check that the pod joins the deployment correctly after it's restored automatically
+    by the StatefulSet.
+    """
+    unit_map = await get_unit_map(ops_test=ops_test)
+    non_leader = unit_map["non_leader"][0]
+    client = AsyncClient(namespace=ops_test.model.info.name)
+
+    # Delete a non-leader pod
+    await client.delete(Pod, name=non_leader.replace("/", "-"))
+    logger.info(f"Deleted pod: {non_leader}")
+
+    # Wait for `upgrade_charm` sequence
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=60
+    )
+
+    pod_num = get_unit_number(non_leader)
+    pod_address = await get_address(ops_test, unit_num=pod_num)
+    password = await get_password(ops_test, pod_num)
+
+    pod_client = Redis(pod_address, password=password, decode_responses=True)
+    role = pod_client.role()
+    pod_client.close()
+
+    assert ("slave" and "connected") in role
+
+
+async def test_delete_primary_pod(ops_test: OpsTest):
+    """Delete the pod that is the Redis primary.
+
+    Check that the pod joins the deployment correctly after it's restored automatically
+    by the StatefulSet.
+    """
+    unit_map = await get_unit_map(ops_test=ops_test)
+    leader = unit_map["leader"]
+    client = AsyncClient(namespace=ops_test.model.info.name)
+
+    # Delete a non-leader pod
+    await client.delete(Pod, name=leader.replace("/", "-"))
+    logger.info(f"Deleted pod: {leader}")
+
+    # Wait for `upgrade_charm` sequence
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME], status="active", timeout=1000, wait_for_exact_units=3, idle_period=60
+    )
+
+    # Get unit map again, in the case leader has changed
+    unit_map = await get_unit_map(ops_test=ops_test)
+    leader = unit_map["leader"]
+
+    pod_num = get_unit_number(leader)
+    pod_address = await get_address(ops_test, unit_num=pod_num)
+    password = await get_sentinel_password(ops_test, pod_num)
+
+    sentinel = Redis(pod_address, password=password, port=26379)
+
+    assert len(sentinel.sentinel_sentinels(service_name=APP_NAME)) == NUM_UNITS - 1
+    assert len(sentinel.sentinel_slaves(service_name=APP_NAME)) == NUM_UNITS - 1
+
+
 @pytest.mark.skip  # TLS will not be implemented as resources in the future
-@pytest.mark.tls_tests
 async def test_blocked_if_no_certificates(ops_test: OpsTest):
     """Check the application status on TLS enable.
 
@@ -139,7 +201,6 @@ async def test_blocked_if_no_certificates(ops_test: OpsTest):
 
 
 @pytest.mark.skip  # TLS will not be implemented as resources in the future
-@pytest.mark.tls_tests
 async def test_enable_tls(ops_test: OpsTest):
     """Check adding TLS certificates and enabling them.
 

@@ -86,7 +86,7 @@ async def get_unit_map(ops_test: OpsTest) -> dict:
     Returns:
         unit_map : {
             "leader": "redis-k8s/0",
-            "non_leader": ["redis-k8s/1", "redis-k8s/1"]
+            "non_leader": ["redis-k8s/1", "redis-k8s/2"]
         }
     """
     unit_map = {"leader": None, "non_leader": []}
