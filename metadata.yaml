@@ -30,6 +30,8 @@ maintainers:
 provides:
   redis:
     interface: redis
+  metrics-endpoint:
+    interface: prometheus_scrape
 
 containers:
   redis:
@@ -39,12 +41,18 @@ containers:
         location: /var/lib/redis
   sentinel:
     resource: redis-image
+  exporter:
+    resource: exporter
 
 resources:
   redis-image:
     type: oci-image
     description: ubuntu lts docker image for redis
     upstream: dataplatformoci/redis:7.0-22.04_edge
+  exporter:
+    type: oci-image
+    description: redis exporter for prometheus metrics
+    upstream: oliver006/redis_exporter
   cert-file:
     type: file
     filename: redis.crt

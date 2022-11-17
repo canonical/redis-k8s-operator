@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional
 
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import ActionEvent, CharmBase, UpgradeCharmEvent
 from ops.framework import EventBase
@@ -32,6 +33,7 @@ from literals import (
     SOCKET_TIMEOUT,
     WAITING_MESSAGE,
 )
+from redis_exporter import Exporter
 from sentinel import Sentinel
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,19 @@ class RedisK8sCharm(CharmBase):
         self._namespace = self.model.name
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
         self.sentinel = Sentinel(self)
+        self.exporter = Exporter(self)
+        self.metrics_endpoint = MetricsEndpointProvider(
+            self,
+            jobs=[
+                {
+                    "static_configs": [
+                        {
+                            "targets": ["*:9121"],
+                        }
+                    ]
+                }
+            ],
+        )
 
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._leader_elected)
@@ -171,6 +186,7 @@ class RedisK8sCharm(CharmBase):
 
         self._update_layer()
         self.sentinel._update_sentinel_layer()
+        self.exporter._update_exporter_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
         if not isinstance(self.unit.status, ActiveStatus):
