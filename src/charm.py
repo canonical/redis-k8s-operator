@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional
 
+from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import ActionEvent, CharmBase, UpgradeCharmEvent
@@ -54,6 +55,7 @@ class RedisK8sCharm(CharmBase):
         self._namespace = self.model.name
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
         self.sentinel = Sentinel(self)
+        
         self.exporter = Exporter(self)
         self.metrics_endpoint = MetricsEndpointProvider(
             self,
@@ -67,6 +69,7 @@ class RedisK8sCharm(CharmBase):
                 }
             ],
         )
+        self.grafana_dashboards = GrafanaDashboardProvider(self)
 
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._leader_elected)
