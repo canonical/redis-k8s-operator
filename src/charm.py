@@ -105,7 +105,9 @@ class RedisK8sCharm(CharmBase):
             # case of the single unit deployment.
             self._peers.data[self.app][LEADER_HOST_KEY] = self.unit_pod_hostname
             for relation in self.model.relations[REDIS_REL_NAME]:
-                relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.unit_pod_hostname)
+                relation.data[self.model.unit]["hostname"] = socket.gethostbyname(
+                    self.unit_pod_hostname
+                )
             return
 
         # Pick a different unit to connect to sentinel
@@ -217,7 +219,9 @@ class RedisK8sCharm(CharmBase):
         relations = self.model.relations[REDIS_REL_NAME]
         if relations:
             for relation in relations:
-                relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.current_master)
+                relation.data[self.model.unit]["hostname"] = socket.gethostbyname(
+                    self.current_master
+                )
             if self._peers.data[self.unit].get("upgrading", "false") == "true":
                 self._peers.data[self.unit]["upgrading"] = ""
 
