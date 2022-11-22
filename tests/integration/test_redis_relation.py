@@ -6,9 +6,11 @@ import asyncio
 import logging
 
 import pytest as pytest
+from lightkube import AsyncClient
+from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
 
-from tests.helpers import APP_NAME, METADATA, NUM_UNITS
+from tests.helpers import APP_NAME, METADATA
 from tests.integration.helpers import (
     check_application_status,
     get_address,
@@ -24,9 +26,14 @@ POSTGRESQL_APP_NAME = "postgresql-k8s"
 logger = logging.getLogger(__name__)
 
 
+@pytest.fixture(scope="module", name="num_units")
+def num_units_fixture(request):
+    return request.config.getoption("--num-units")
+
+
 @pytest.mark.skip_if_deployed
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test: OpsTest):
+async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
     """Build the charm-under-test and deploy it.
 
     Assert on the unit status before any relations/configurations take place.
@@ -47,12 +54,15 @@ async def test_build_and_deploy(ops_test: OpsTest):
                 resources=resources,
                 application_name=APP_NAME,
                 trust=True,
-                num_units=NUM_UNITS,
+                num_units=num_units,
+                series="focal",
             ),
             ops_test.model.deploy(
-                FIRST_DISCOURSE_APP_NAME, application_name=FIRST_DISCOURSE_APP_NAME
+                FIRST_DISCOURSE_APP_NAME, application_name=FIRST_DISCOURSE_APP_NAME, series="focal"
             ),
-            ops_test.model.deploy(POSTGRESQL_APP_NAME, application_name=POSTGRESQL_APP_NAME),
+            ops_test.model.deploy(
+                POSTGRESQL_APP_NAME, application_name=POSTGRESQL_APP_NAME, series="focal"
+            ),
         )
         await ops_test.model.wait_for_idle(
             apps=[APP_NAME, POSTGRESQL_APP_NAME], status="active", timeout=3000
@@ -103,6 +113,37 @@ async def test_discourse_request(ops_test: OpsTest):
     assert response.status == 200
 
 
+async def test_delete_redis_pod(
+    ops_test: OpsTest,
+):
+    """Delete the leader redis-k8s pod.
+
+    Check relation data updated with the new redis-k8s pod IP after pod revived by juju.
+    """
+    unit_map = await get_unit_map(ops_test=ops_test)
+    leader = unit_map["leader"]
+    leader_unit_num = int(leader.split("/")[-1])
+    redis_ip_before = await get_address(ops_test, app_name=APP_NAME, unit_num=leader_unit_num)
+
+    client = AsyncClient(namespace=ops_test.model.info.name)
+    await client.delete(Pod, name=f"{APP_NAME}-{leader_unit_num}")
+    await ops_test.model.wait_for_idle(status="active")
+    await ops_test.model.block_until(
+        lambda: check_application_status(ops_test, FIRST_DISCOURSE_APP_NAME) == "active",
+        timeout=600,
+        wait_period=5,
+    )
+
+    redis_ip_after = await get_address(ops_test, app_name=APP_NAME, unit_num=leader_unit_num)
+    # discourse restarted, unit_num += 1
+    discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME, unit_num=1)
+    url = f"http://{discourse_ip}:3000/site.json"
+    response = query_url(url)
+
+    assert redis_ip_before != redis_ip_after
+    assert response.status == 200
+
+
 async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
     """Test the second Discourse charm."""
     unit_map = await get_unit_map(ops_test)
@@ -121,6 +162,7 @@ async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
             "smtp_address": "127.0.0.1",
             "smtp_domain": "foo.internal",
         },
+        series="focal",
     )
     # Discourse becomes blocked waiting for PostgreSQL relation.
     await ops_test.model.wait_for_idle(

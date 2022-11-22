@@ -251,6 +251,7 @@ class TestCharm(TestCase):
         # After adding them, check that the property returns paths for the three of them
         self.assertTrue(None not in self.harness.charm._certificates)
 
+        self.harness.set_leader(True)
         self.harness.charm.on.upgrade_charm.emit()
         _store_certificates.assert_called()
 

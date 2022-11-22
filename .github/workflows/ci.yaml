@@ -61,6 +61,24 @@ jobs:
       - name: Run integration tests
         run: tox -e integration-relation
 
+  integration-test-relation-single-unit:
+    name: Integration tests (relation, num_units=1)
+    needs:
+      - lint
+      - unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: microk8s
+          # This is needed until https://bugs.launchpad.net/juju/+bug/1977582 is fixed
+          bootstrap-options: "--agent-version 2.9.29"
+      - name: Run integration tests
+        run: tox -e integration-relation -- --num-units 1
+
   integration-test-password:
     name: Integration tests (password)
     needs:
