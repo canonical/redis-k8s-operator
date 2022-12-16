@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
+from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.redis_k8s.v0.redis import RedisProvides
 from ops.charm import ActionEvent, CharmBase, UpgradeCharmEvent
@@ -26,6 +27,8 @@ from tenacity import before_log, retry, stop_after_attempt, wait_fixed
 
 from literals import (
     LEADER_HOST_KEY,
+    LOG_DIR,
+    LOG_FILE,
     PEER,
     PEER_PASSWORD_KEY,
     REDIS_PORT,
@@ -55,7 +58,6 @@ class RedisK8sCharm(CharmBase):
         self._namespace = self.model.name
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
         self.sentinel = Sentinel(self)
-        
         self.exporter = Exporter(self)
         self.metrics_endpoint = MetricsEndpointProvider(
             self,
@@ -70,6 +72,9 @@ class RedisK8sCharm(CharmBase):
             ],
         )
         self.grafana_dashboards = GrafanaDashboardProvider(self)
+        self.loki_push = LogProxyConsumer(
+            self, log_files=[LOG_FILE], relation_name="logging", container_name="redis"
+        )
 
         self.framework.observe(self.on.redis_pebble_ready, self._redis_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._leader_elected)
@@ -305,6 +310,15 @@ class RedisK8sCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
             return
 
+        if not container.exists(LOG_DIR):
+            container.make_dir(
+                LOG_DIR,
+                make_parents=True,
+                permissions=0o770,
+                user="redis",
+                group="redis",
+            )
+
         if not self._valid_app_databag():
             self.unit.status = WaitingStatus("Waiting for peer data to be updated")
             return
@@ -357,6 +371,7 @@ class RedisK8sCharm(CharmBase):
             "--bind 0.0.0.0",
             f"--masterauth {self._get_password()}",
             f"--replica-announce-ip {self.unit_pod_hostname}",
+            f"--logfile {LOG_FILE}",
         ]
 
         if self._peers.data[self.app].get("enable-password", "true") == "false":
@@ -367,6 +382,7 @@ class RedisK8sCharm(CharmBase):
                 "--bind 0.0.0.0",
                 f"--replica-announce-ip {self.unit_pod_hostname}",
                 "--protected-mode no",
+                f"--logfile {LOG_FILE}",
             ]
 
         if self.config["enable-tls"]:

@@ -15,5 +15,7 @@ SOCKET_TIMEOUT = 1
 REDIS_PORT = 6379
 SENTINEL_PORT = 26379
 
+LOG_DIR = "/var/log/redis"
+LOG_FILE = f"{LOG_DIR}/redis-server.log"
 CONFIG_DIR = "/etc/redis-server"
 SENTINEL_CONFIG_PATH = f"{CONFIG_DIR}/sentinel.conf"

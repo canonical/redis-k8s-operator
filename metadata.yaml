@@ -35,6 +35,10 @@ provides:
   grafana-dashboard:
     interface: grafana_dashboard
 
+requires:
+  logging:
+      interface: loki_push_api
+
 containers:
   redis:
     resource: redis-image
