@@ -102,7 +102,7 @@ To see the logs for a specific pod:
 The Python operator framework includes a very nice harness for testing
 operator behaviour without full deployment.
 
-    tox run -e fmt           # update your code according to linting rules
+    tox run -e format        # update your code according to linting rules
     tox run -e lint          # code style
     tox run -e unit          # unit tests
     tox run -e integration   # integration tests
