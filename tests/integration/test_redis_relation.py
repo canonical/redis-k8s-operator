@@ -60,12 +60,7 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
             ops_test.model.deploy(
                 FIRST_DISCOURSE_APP_NAME, application_name=FIRST_DISCOURSE_APP_NAME, series="focal"
             ),
-            ops_test.model.deploy(
-                POSTGRESQL_APP_NAME,
-                application_name=POSTGRESQL_APP_NAME,
-                channel="latest/stable",
-                series="focal",
-            ),
+            ops_test.model.deploy(POSTGRESQL_APP_NAME, application_name=POSTGRESQL_APP_NAME),
         )
         await ops_test.model.wait_for_idle(
             apps=[APP_NAME, POSTGRESQL_APP_NAME], status="active", timeout=3000
