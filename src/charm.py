@@ -85,6 +85,12 @@ class RedisK8sCharm(CharmBase):
         if not isinstance(self.unit.status, ActiveStatus):
             event.defer()
             return
+        # In the event of a pod restart on the same node the upgrade event is not fired.
+        # The IP might change, so the data needs to be propagated
+        for relation in self.model.relations[REDIS_REL_NAME]:
+            relation.data[self.model.unit]["hostname"] = socket.gethostbyname(
+                self.unit_pod_hostname
+            )
 
     def _upgrade_charm(self, event: UpgradeCharmEvent) -> None:
         """Handle the upgrade_charm event.
