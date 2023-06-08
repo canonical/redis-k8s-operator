@@ -89,7 +89,7 @@ class RedisK8sCharm(CharmBase):
         # The IP might change, so the data needs to be propagated
         for relation in self.model.relations[REDIS_REL_NAME]:
             relation.data[self.model.unit]["hostname"] = socket.gethostbyname(
-                self.unit_pod_hostname
+                self.current_master
             )
 
     def _upgrade_charm(self, event: UpgradeCharmEvent) -> None:
