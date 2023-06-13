@@ -144,8 +144,7 @@ async def test_delete_redis_pod(ops_test: OpsTest):
     )
 
     redis_ip_after = await get_address(ops_test, app_name=APP_NAME, unit_num=leader_unit_num)
-    # discourse restarted, unit_num += 1
-    discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME, unit_num=1)
+    discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME)
     url = f"http://{discourse_ip}:3000/site.json"
     response = query_url(url)
 
