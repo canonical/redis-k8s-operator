@@ -63,20 +63,20 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
             ops_test.model.deploy(
                 POSTGRESQL_APP_NAME,
                 application_name=POSTGRESQL_APP_NAME,
-                channel="latest/edge",
+                channel="latest/stable",
                 series="focal",
             ),
         )
         await ops_test.model.wait_for_idle(
-            apps=[APP_NAME, POSTGRESQL_APP_NAME], status="active", timeout=3000
+            apps=[APP_NAME, POSTGRESQL_APP_NAME], status="active", idle_period=20, timeout=3000
         )
         # Discourse becomes blocked waiting for relations.
         await ops_test.model.wait_for_idle(
-            apps=[FIRST_DISCOURSE_APP_NAME], status="blocked", timeout=3000
+            apps=[FIRST_DISCOURSE_APP_NAME], status="waiting", idle_period=20, timeout=3000
         )
 
     assert (
-        ops_test.model.applications[FIRST_DISCOURSE_APP_NAME].units[0].workload_status == "blocked"
+        ops_test.model.applications[FIRST_DISCOURSE_APP_NAME].units[0].workload_status == "waiting"
     )
     assert ops_test.model.applications[POSTGRESQL_APP_NAME].units[0].workload_status == "active"
 
@@ -101,8 +101,13 @@ async def test_discourse_relation(ops_test: OpsTest):
     """
 
     await ops_test.model.block_until(
-        lambda: check_application_status(ops_test, "discourse-k8s") == "active",
-        timeout=600,
+        lambda: check_application_status(ops_test, FIRST_DISCOURSE_APP_NAME) == "active",
+        timeout=900,
+        wait_period=5,
+    )
+    await ops_test.model.block_until(
+        lambda: check_application_status(ops_test, POSTGRESQL_APP_NAME) == "active",
+        timeout=900,
         wait_period=5,
     )
 
@@ -116,9 +121,7 @@ async def test_discourse_request(ops_test: OpsTest):
     assert response.status == 200
 
 
-async def test_delete_redis_pod(
-    ops_test: OpsTest,
-):
+async def test_delete_redis_pod(ops_test: OpsTest):
     """Delete the leader redis-k8s pod.
 
     Check relation data updated with the new redis-k8s pod IP after pod revived by juju.
@@ -130,7 +133,10 @@ async def test_delete_redis_pod(
 
     client = AsyncClient(namespace=ops_test.model.info.name)
     await client.delete(Pod, name=f"{APP_NAME}-{leader_unit_num}")
-    await ops_test.model.wait_for_idle(status="active")
+    # Wait for `upgrade_charm` sequence
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME], status="active", timeout=1000, idle_period=60
+    )
     await ops_test.model.block_until(
         lambda: check_application_status(ops_test, FIRST_DISCOURSE_APP_NAME) == "active",
         timeout=600,
@@ -138,8 +144,7 @@ async def test_delete_redis_pod(
     )
 
     redis_ip_after = await get_address(ops_test, app_name=APP_NAME, unit_num=leader_unit_num)
-    # discourse restarted, unit_num += 1
-    discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME, unit_num=1)
+    discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME)
     url = f"http://{discourse_ip}:3000/site.json"
     response = query_url(url)
 

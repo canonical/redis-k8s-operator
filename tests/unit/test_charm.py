@@ -28,6 +28,8 @@ class TestCharm(TestCase):
 
         self.harness = Harness(RedisK8sCharm)
         self.addCleanup(self.harness.cleanup)
+        self.harness.set_can_connect("redis", True)
+        self.harness.set_can_connect("sentinel", True)
         self.harness.begin()
         self.harness.add_relation(self._peer_relation, self.harness.charm.app.name)
 
