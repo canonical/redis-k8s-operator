@@ -146,7 +146,6 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
         timeout=60,
     )
     assert last_redis.execute_command("ROLE")[0] == "master"
-    sentinel.close()
     last_redis.close()
 
     # SCALE DOWN #
@@ -159,10 +158,6 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
         assert client.get("testKey") == b"myValue"
         client.close()
 
-    address = await get_address(ops_test, unit_num=0)
-    sentinel = Redis(address, port=26379, password=sentinel_password, decode_responses=True)
-    sentinel.execute_command(f"SENTINEL RESET {APP_NAME}")
-    time.sleep(10)
     master_info = sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
     master_info = dict(zip(master_info[::2], master_info[1::2]))
 
