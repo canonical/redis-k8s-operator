@@ -45,10 +45,11 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version.
-LIBPATCH = 3
+LIBPATCH = 4
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_REALTION_NAME = "redis"
 
 class RedisRelationUpdatedEvent(EventBase):
     """An event for the redis relation having been updated."""
@@ -60,9 +61,9 @@ class RedisRelationCharmEvents(CharmEvents):
 
 
 class RedisRequires(Object):
-    def __init__(self, charm, _stored):
+    def __init__(self, charm, _stored, relation_name: str = DEFAULT_REALTION_NAME):
         """A class implementing the redis requires relation."""
-        super().__init__(charm, "redis")
+        super().__init__(charm, relation_name)
         self.framework.observe(charm.on.redis_relation_joined, self._on_relation_changed)
         self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
         self.framework.observe(charm.on.redis_relation_broken, self._on_relation_broken)
@@ -91,9 +92,9 @@ class RedisRequires(Object):
 
 
 class RedisProvides(Object):
-    def __init__(self, charm, port):
+    def __init__(self, charm, port, relation_name: str = DEFAULT_REALTION_NAME):
         """A class implementing the redis provides relation."""
-        super().__init__(charm, "redis")
+        super().__init__(charm, relation_name)
         self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
         self._port = port
         self._charm = charm
