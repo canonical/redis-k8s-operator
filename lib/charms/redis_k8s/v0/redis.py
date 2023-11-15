@@ -33,6 +33,7 @@ requires:
 """
 import logging
 import socket
+from typing import Dict, Optional
 
 from ops.charm import CharmEvents
 from ops.framework import EventBase, EventSource, Object
@@ -61,14 +62,16 @@ class RedisRelationCharmEvents(CharmEvents):
 
 
 class RedisRequires(Object):
+
     def __init__(self, charm, _stored, relation_name: str = DEFAULT_REALTION_NAME):
         """A class implementing the redis requires relation."""
         super().__init__(charm, relation_name)
-        self.framework.observe(charm.on.redis_relation_joined, self._on_relation_changed)
-        self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
-        self.framework.observe(charm.on.redis_relation_broken, self._on_relation_broken)
+        self.framework.observe(charm.on[relation_name].relation_joined, self._on_relation_changed)
+        self.framework.observe(charm.on[relation_name].relation_changed, self._on_relation_changed)
+        self.framework.observe(charm.on[relation_name].relation_broken, self._on_relation_broken)
         self._stored = _stored
         self.charm = charm
+        self.relation_name = relation_name
 
     def _on_relation_changed(self, event):
         """Handle the relation changed event."""
@@ -90,12 +93,37 @@ class RedisRequires(Object):
         # Trigger an event that our charm can react to.
         self.charm.on.redis_relation_updated.emit()
 
+    def get_relation_data(self) -> Optional[Dict[str, str]]:
+        """Retrieve the relation data.
+
+        Returns:
+            Dict: dict containing the relation data.
+        """
+        relation = self.model.get_relation(self.relation_name)
+        if not relation:
+            return None
+        unit = next(iter(relation.units))
+        return relation.data[unit]
+
+    def get_url(self) -> Optional[str]:
+        """Retrieve the Redis URL.
+
+        Returns:
+            str: the Redis URL.
+        """
+        relation_data = self.get_relation_data()
+        if not relation_data:
+            return None
+        redis_host = relation_data.get("hostname")
+        redis_port = relation_data.get("port")
+        return f"redis://{redis_host}:{redis_port}"
+
 
 class RedisProvides(Object):
     def __init__(self, charm, port, relation_name: str = DEFAULT_REALTION_NAME):
         """A class implementing the redis provides relation."""
         super().__init__(charm, relation_name)
-        self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
+        self.framework.observe(charm.on[relation_name].relation_changed, self._on_relation_changed)
         self._port = port
         self._charm = charm
 
