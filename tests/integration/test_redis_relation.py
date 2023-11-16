@@ -63,8 +63,9 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
             ops_test.model.deploy(
                 POSTGRESQL_APP_NAME,
                 application_name=POSTGRESQL_APP_NAME,
-                channel="latest/stable",
-                series="focal",
+                channel="14/stable",
+                series="jammy",
+                trust=True,
             ),
         )
         await ops_test.model.wait_for_idle(
@@ -86,7 +87,7 @@ async def test_discourse_relation(ops_test: OpsTest):
     # Test the first Discourse charm.
     # Add both relations to Discourse (PostgreSQL and Redis)
     # and wait for it to be ready.
-    await ops_test.model.relate(f"{POSTGRESQL_APP_NAME}:db-admin", FIRST_DISCOURSE_APP_NAME)
+    await ops_test.model.relate(f"{POSTGRESQL_APP_NAME}:database", FIRST_DISCOURSE_APP_NAME)
     # Wait until discourse handles all relation events related to postgresql
     await ops_test.model.relate(APP_NAME, FIRST_DISCOURSE_APP_NAME)
 
