@@ -65,6 +65,7 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
                 application_name=POSTGRESQL_APP_NAME,
                 channel="14/stable",
                 series="jammy",
+                trust=True,
             ),
         )
         await ops_test.model.wait_for_idle(
