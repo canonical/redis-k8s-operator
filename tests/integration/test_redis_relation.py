@@ -150,3 +150,40 @@ async def test_delete_redis_pod(ops_test: OpsTest):
 
     assert redis_ip_before != redis_ip_after
     assert response.status == 200
+
+
+async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
+    """Test the second Discourse charm."""
+    unit_map = await get_unit_map(ops_test)
+
+    # Get the Redis instance IP address.
+    redis_host = await get_address(ops_test, unit_num=get_unit_number(unit_map["leader"]))
+
+    # Deploy Discourse and wait for it to be blocked waiting for database relation.
+    await ops_test.model.deploy(
+        SECOND_DISCOURSE_APP_NAME,
+        application_name=SECOND_DISCOURSE_APP_NAME,
+        config={
+            "redis_host": redis_host,
+            "developer_emails": "user@foo.internal",
+            "external_hostname": "foo.internal",
+            "smtp_address": "127.0.0.1",
+            "smtp_domain": "foo.internal",
+        },
+        series="focal",
+    )
+    # Discourse becomes blocked waiting for PostgreSQL relation.
+    await ops_test.model.wait_for_idle(
+        apps=[SECOND_DISCOURSE_APP_NAME], status="blocked", timeout=3000
+    )
+
+    # Relate PostgreSQL and Discourse, waiting for Discourse to be ready.
+    await ops_test.model.add_relation(
+        f"{POSTGRESQL_APP_NAME}:db-admin",
+        SECOND_DISCOURSE_APP_NAME,
+    )
+    await ops_test.model.wait_for_idle(
+        apps=[POSTGRESQL_APP_NAME, SECOND_DISCOURSE_APP_NAME, APP_NAME],
+        status="active",
+        timeout=3000,  # Discourse takes a longer time to become active (a lot of setup).
+    )
