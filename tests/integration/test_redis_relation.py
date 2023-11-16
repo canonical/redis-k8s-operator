@@ -86,7 +86,7 @@ async def test_discourse_relation(ops_test: OpsTest):
     # Test the first Discourse charm.
     # Add both relations to Discourse (PostgreSQL and Redis)
     # and wait for it to be ready.
-    await ops_test.model.relate(f"{POSTGRESQL_APP_NAME}:db-admin", FIRST_DISCOURSE_APP_NAME)
+    await ops_test.model.relate(f"{POSTGRESQL_APP_NAME}:database", FIRST_DISCOURSE_APP_NAME)
     # Wait until discourse handles all relation events related to postgresql
     await ops_test.model.relate(APP_NAME, FIRST_DISCOURSE_APP_NAME)
 
