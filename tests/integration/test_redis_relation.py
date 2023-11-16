@@ -63,7 +63,7 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
             ops_test.model.deploy(
                 POSTGRESQL_APP_NAME,
                 application_name=POSTGRESQL_APP_NAME,
-                channel="latest/stable",
+                channel="14/stable",
                 series="focal",
             ),
         )
