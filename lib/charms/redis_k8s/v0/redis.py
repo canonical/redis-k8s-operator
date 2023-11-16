@@ -120,10 +120,10 @@ class RedisRequires(Object):
 
 
 class RedisProvides(Object):
-    def __init__(self, charm, port, relation_name: str = DEFAULT_REALTION_NAME):
+    def __init__(self, charm, port):
         """A class implementing the redis provides relation."""
-        super().__init__(charm, relation_name)
-        self.framework.observe(charm.on[relation_name].relation_changed, self._on_relation_changed)
+        super().__init__(charm, DEFAULT_REALTION_NAME)
+        self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
         self._port = port
         self._charm = charm
 
