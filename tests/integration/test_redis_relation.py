@@ -15,6 +15,7 @@ from tests.integration.helpers import (
     check_application_status,
     get_address,
     get_unit_map,
+    get_unit_number,
     query_url,
 )
 
