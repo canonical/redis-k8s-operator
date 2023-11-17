@@ -100,7 +100,7 @@ class RedisRequires(Object):
             Dict: dict containing the relation data.
         """
         relation = self.model.get_relation(self.relation_name)
-        if not relation:
+        if not relation or not relation.units:
             return None
         unit = next(iter(relation.units))
         return relation.data[unit]
