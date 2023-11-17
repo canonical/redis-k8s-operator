@@ -113,7 +113,7 @@ class RedisRequires(Object):
         Returns:
             str: the Redis URL.
         """
-        relation_data = self.get_relation_data()
+        relation_data = self.relation_data
         if not relation_data:
             return None
         redis_host = relation_data.get("hostname")
