@@ -93,7 +93,8 @@ class RedisRequires(Object):
         # Trigger an event that our charm can react to.
         self.charm.on.redis_relation_updated.emit()
 
-    def get_relation_data(self) -> Optional[Dict[str, str]]:
+    @property
+    def relation_data(self) -> Optional[Dict[str, str]]:
         """Retrieve the relation data.
 
         Returns:
@@ -105,7 +106,8 @@ class RedisRequires(Object):
         unit = next(iter(relation.units))
         return relation.data[unit]
 
-    def get_url(self) -> Optional[str]:
+    @property
+    def url(self) -> Optional[str]:
         """Retrieve the Redis URL.
 
         Returns:
