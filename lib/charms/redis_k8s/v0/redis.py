@@ -7,7 +7,7 @@ Import `RedisRequires` in your charm by adding the following to `src/charm.py`:
 ```
 from charms.redis_k8s.v0.redis import RedisRequires
 ```
-Define the following attibutes in charm charm class for the library to be able to work with it
+Define the following attributes in charm charm class for the library to be able to work with it
 ```
  _stored = StoredState()
     on = RedisRelationCharmEvents()
