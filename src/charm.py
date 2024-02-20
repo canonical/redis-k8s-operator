@@ -88,13 +88,13 @@ class RedisK8sCharm(CharmBase):
         # In the event of a pod restart on the same node the upgrade event is not fired.
         # The IP might change, so the data needs to be propagated
         for relation in self.model.relations[REDIS_REL_NAME]:
-            relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.current_master)
+            relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.current_main)
 
     def _upgrade_charm(self, event: UpgradeCharmEvent) -> None:
         """Handle the upgrade_charm event.
 
         Check for failover status and update connection information for redis relation and
-        current_master.
+        current_main.
         Also tries to store the certificates on the redis container, as new `juju attach-resource`
         will trigger this event.
         """
@@ -150,10 +150,10 @@ class RedisK8sCharm(CharmBase):
         if not self.get_sentinel_password():
             logger.info("Creating sentinel password")
             self._peers.data[self.app][SENTINEL_PASSWORD_KEY] = self._generate_password()
-        # NOTE: if current_master is not set yet, the application is being deployed for the
+        # NOTE: if current_main is not set yet, the application is being deployed for the
         # first time. Otherwise, we check for failover in case previous juju leader was redis
         # master as well.
-        if self.current_master is None:
+        if self.current_main is None:
             logger.info(
                 "Initial replication, setting leader-host to {}".format(self.unit_pod_hostname)
             )
@@ -224,7 +224,7 @@ class RedisK8sCharm(CharmBase):
         if relations:
             for relation in relations:
                 relation.data[self.model.unit]["hostname"] = socket.gethostbyname(
-                    self.current_master
+                    self.current_main
                 )
             if self._peers.data[self.unit].get("upgrading", "false") == "true":
                 self._peers.data[self.unit]["upgrading"] = ""
@@ -377,8 +377,8 @@ class RedisK8sCharm(CharmBase):
             ]
 
         # Check that current unit is master
-        if self.current_master != self.unit_pod_hostname:
-            extra_flags += [f"--replicaof {self.current_master} {REDIS_PORT}"]
+        if self.current_main != self.unit_pod_hostname:
+            extra_flags += [f"--replicaof {self.current_main} {REDIS_PORT}"]
 
             if self.config["enable-tls"]:
                 extra_flags += ["--tls-replication yes"]
@@ -455,7 +455,7 @@ class RedisK8sCharm(CharmBase):
         return socket.getfqdn(name)
 
     @property
-    def current_master(self) -> Optional[str]:
+    def current_main(self) -> Optional[str]:
         """Get the current master."""
         return self._peers.data[self.app].get(LEADER_HOST_KEY)
 
@@ -472,7 +472,7 @@ class RedisK8sCharm(CharmBase):
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             password = True
 
-        return bool(password and self.current_master)
+        return bool(password and self.current_main)
 
     def _generate_password(self) -> str:
         """Generate a random 16 character password string.
@@ -583,7 +583,7 @@ class RedisK8sCharm(CharmBase):
         info = self.sentinel.get_master_info(host=host)
         if info is None:
             return False
-        elif (info["ip"] == self.current_master) and ("s_down" not in info["flags"]):
+        elif (info["ip"] == self.current_main) and ("s_down" not in info["flags"]):
             return True
 
         return False
@@ -605,7 +605,7 @@ class RedisK8sCharm(CharmBase):
         This method should only be called from juju leader, to avoid more than one
         sentinel sending failovers concurrently.
         """
-        if self._k8s_hostname(departing_unit_name) != self.current_master:
+        if self._k8s_hostname(departing_unit_name) != self.current_main:
             # No failover needed
             return
 
