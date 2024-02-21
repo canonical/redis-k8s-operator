@@ -132,7 +132,7 @@ class RedisProvides(Object):
 
     def _on_relation_changed(self, event):
         """Handle the relation changed event."""
-        event.relation.data[self.model.unit]["hostname"] = self._get_main_ip()
+        event.relation.data[self.model.unit]["hostname"] = self._get_primary_ip()
         event.relation.data[self.model.unit]["port"] = str(self._port)
         # The reactive Redis charm also exposes 'password'. When tackling
         # https://github.com/canonical/redis-k8s/issues/7 add 'password'
@@ -146,6 +146,6 @@ class RedisProvides(Object):
             return address
         return self.app.name
 
-    def _get_main_ip(self) -> str:
-        """Gets the ip of the current redis main process."""
+    def _get_primary_ip(self) -> str:
+        """Gets the ip of the current redis primary process."""
         return socket.gethostbyname(self._charm.current_primary)

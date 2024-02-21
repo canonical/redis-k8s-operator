@@ -197,11 +197,11 @@ class TestCharm(TestCase):
             admin_password,
         )
 
-    @mock.patch.object(RedisProvides, "_get_main_ip")
-    def test_on_relation_changed_status_when_unit_is_leader(self, get_main_ip):
+    @mock.patch.object(RedisProvides, "_get_primary_ip")
+    def test_on_relation_changed_status_when_unit_is_leader(self, get_primary_ip):
         # Given
         self.harness.set_leader(True)
-        get_main_ip.return_value = "10.2.1.5"
+        get_primary_ip.return_value = "10.2.1.5"
 
         rel_id = self.harness.add_relation("redis", "wordpress")
         self.harness.add_relation_unit(rel_id, "wordpress/0")
