@@ -50,7 +50,7 @@ async def test_build_and_deploy(ops_test: OpsTest):
     assert ops_test.model.applications[APP_NAME].units[0].workload_status == "active"
 
 
-@pytest.mark.run(before="test_scale_down_departing_master")
+@pytest.mark.run(before="test_scale_down_departing_primary")
 async def test_scale_up_replication_after_failover(ops_test: OpsTest):
     """Trigger a failover and scale up the application, then test replication status."""
     unit_map = await get_unit_map(ops_test)
@@ -60,7 +60,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
     leader_address = await get_address(ops_test, unit_num=leader_num)
     password = await get_password(ops_test, leader_num)
 
-    # Set some key on the master replica.
+    # Set some key on the primary replica.
     leader_client = Redis(leader_address, password=password)
     leader_client.set("testKey", "myValue")
     leader_client.close()
@@ -68,14 +68,14 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
     sentinel_password = await get_sentinel_password(ops_test)
     logger.info("retrieved sentinel password for %s: %s", APP_NAME, password)
 
-    # Trigger a master failover
+    # Trigger a primary failover
     sentinel = Redis(leader_address, password=sentinel_password, port=26379, decode_responses=True)
     sentinel.execute_command(f"SENTINEL failover {APP_NAME}")
     # Give time so sentinel updates information of failover
     time.sleep(60)
 
     await ops_test.model.block_until(
-        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}"),
+        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL primary {APP_NAME}"),
         timeout=60,
     )
 
@@ -94,13 +94,13 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
         timeout=1000,
     )
 
-    master_info = sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
-    master_info = dict(zip(master_info[::2], master_info[1::2]))
+    primary_info = sentinel.execute_command(f"SENTINEL primary {APP_NAME}")
+    primary_info = dict(zip(primary_info[::2], primary_info[1::2]))
 
     # General checks that the system is aware of the new unit
-    assert master_info["num-slaves"] == "3"
-    assert master_info["quorum"] == "3"
-    assert master_info["num-other-sentinels"] == "3"
+    assert primary_info["num-slaves"] == "3"
+    assert primary_info["quorum"] == "3"
+    assert primary_info["num-other-sentinels"] == "3"
 
     unit_map = await get_unit_map(ops_test)
     # Check that the initial key is still replicated across units
@@ -112,7 +112,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
 
 
 @pytest.mark.run(after="test_scale_up_replication_after_failover")
-async def test_scale_down_departing_master(ops_test: OpsTest):
+async def test_scale_down_departing_primary(ops_test: OpsTest):
     """Failover to the last unit and scale down."""
     unit_map = await get_unit_map(ops_test)
     logger.info("Unit mapping: {}".format(unit_map))
@@ -130,22 +130,22 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
     last_redis = Redis(last_address, password=password, decode_responses=True)
 
     # INITIAL SETUP #
-    # Sanity check that the added unit on the previous test is not a master
-    assert last_redis.execute_command("ROLE")[0] != "master"
+    # Sanity check that the added unit on the previous test is not a primary
+    assert last_redis.execute_command("ROLE")[0] != "primary"
 
     # Make the added unit a priority during failover
     last_redis.execute_command("CONFIG SET replica-priority 1")
     time.sleep(1)
-    # Failover so the last unit becomes master
+    # Failover so the last unit becomes primary
     sentinel.execute_command(f"SENTINEL FAILOVER {APP_NAME}")
     # Give time so sentinel updates information of failover
     time.sleep(60)
 
     await ops_test.model.block_until(
-        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}"),
+        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL primary {APP_NAME}"),
         timeout=60,
     )
-    assert last_redis.execute_command("ROLE")[0] == "master"
+    assert last_redis.execute_command("ROLE")[0] == "primary"
     last_redis.close()
 
     # SCALE DOWN #
@@ -158,12 +158,12 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
         assert client.get("testKey") == b"myValue"
         client.close()
 
-    master_info = sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
-    master_info = dict(zip(master_info[::2], master_info[1::2]))
+    primary_info = sentinel.execute_command(f"SENTINEL primary {APP_NAME}")
+    primary_info = dict(zip(primary_info[::2], primary_info[1::2]))
 
     # General checks that the system is reconfigured after departed leader
-    assert master_info["num-slaves"] == "2"
-    assert master_info["quorum"] == "2"
-    assert master_info["num-other-sentinels"] == "2"
+    assert primary_info["num-slaves"] == "2"
+    assert primary_info["quorum"] == "2"
+    assert primary_info["num-other-sentinels"] == "2"
 
     sentinel.close()

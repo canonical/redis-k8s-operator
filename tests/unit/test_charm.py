@@ -86,7 +86,7 @@ class TestCharm(TestCase):
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
-            f"--masterauth {self.harness.charm._get_password()}",
+            f"--primaryauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
         ]
         expected_plan = {
@@ -118,7 +118,7 @@ class TestCharm(TestCase):
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
-            f"--masterauth {self.harness.charm._get_password()}",
+            f"--primaryauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
         ]
         expected_plan = {
@@ -283,7 +283,7 @@ class TestCharm(TestCase):
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
-            f"--masterauth {self.harness.charm._get_password()}",
+            f"--primaryauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--tls-port 6379",
             "--port 0",
@@ -319,11 +319,11 @@ class TestCharm(TestCase):
         def my_side_effect(value: str):
             mapping = {
                 f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
-                f"SENTINEL MASTER {self.harness.charm._name}": [
+                f"SENTINEL primary {self.harness.charm._name}": [
                     "ip",
                     APPLICATION_DATA["leader-host"],
                     "flags",
-                    "master",
+                    "primary",
                 ],
             }
             return mapping.get(value)
@@ -343,7 +343,7 @@ class TestCharm(TestCase):
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
-            f"--masterauth {self.harness.charm._get_password()}",
+            f"--primaryauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             f"--replicaof {leader_hostname} {redis_port}",
         ]
@@ -370,7 +370,7 @@ class TestCharm(TestCase):
         def my_side_effect(value: str):
             mapping = {
                 f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
-                f"SENTINEL MASTER {self.harness.charm._name}": [
+                f"SENTINEL primary {self.harness.charm._name}": [
                     "ip",
                     "different-leader",
                     "flags",
@@ -389,8 +389,8 @@ class TestCharm(TestCase):
         self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
 
         # NOTE: On config changed, charm will be updated with APPLICATION_DATA. But a
-        # call to `execute_command(SENTINEL MASTER redis-k8s)` will return `different_leader`
-        # when checking the master, simulating that sentinel triggered failover in between
+        # call to `execute_command(SENTINEL primary redis-k8s)` will return `different_leader`
+        # when checking the primary, simulating that sentinel triggered failover in between
         # charm events.
         self.harness._emit_relation_changed(rel.id, "redis-k8s")
 
@@ -407,16 +407,16 @@ class TestCharm(TestCase):
         self.assertEqual(updated_data["leader-host"], "different-leader")
 
     @mock.patch.object(Redis, "execute_command")
-    def test_forced_failover_when_unit_departed_is_master(self, execute_command):
+    def test_forced_failover_when_unit_departed_is_primary(self, execute_command):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
             mapping = {
                 f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
-                f"SENTINEL MASTER {self.harness.charm._name}": [
+                f"SENTINEL primary {self.harness.charm._name}": [
                     "ip",
                     self.harness.charm._k8s_hostname("redis-k8s/1"),
                     "flags",
-                    "master",
+                    "primary",
                 ],
             }
             return mapping.get(value)
@@ -427,7 +427,7 @@ class TestCharm(TestCase):
         rel = self.harness.charm.model.get_relation(self._peer_relation)
         # Simulate an update to the application databag made by the leader unit
         self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
-        # Add and remove a unit that sentinel will simulate as current master
+        # Add and remove a unit that sentinel will simulate as current primary
         self.harness.add_relation_unit(rel.id, "redis-k8s/1")
 
         rel = self.harness.charm.model.get_relation(self._peer_relation)

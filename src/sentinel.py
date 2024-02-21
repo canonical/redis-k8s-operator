@@ -108,12 +108,12 @@ class Sentinel(Object):
         # render the template file with the correct values.
         rendered = template.render(
             hostname=self.charm.unit_pod_hostname,
-            master_name=self.charm._name,
+            primary_name=self.charm._name,
             sentinel_port=SENTINEL_PORT,
-            redis_master=self.charm.current_primary,
+            redis_primary=self.charm.current_primary,
             redis_port=REDIS_PORT,
             quorum=self.expected_quorum,
-            master_password=self.charm._get_password(),
+            primary_password=self.charm._get_password(),
             sentinel_password=self.charm.get_sentinel_password(),
         )
         self._copy_file(SENTINEL_CONFIG_PATH, rendered, "sentinel")
@@ -147,17 +147,17 @@ class Sentinel(Object):
             group="redis",
         )
 
-    def get_master_info(self, host="0.0.0.0") -> Optional[dict]:
-        """Connect to sentinel and return the current master."""
+    def get_primary_info(self, host="0.0.0.0") -> Optional[dict]:
+        """Connect to sentinel and return the current primary."""
         with self.sentinel_client(host) as sentinel:
             try:
-                # get sentinel info about the master
-                master_info = sentinel.execute_command(f"SENTINEL MASTER {self.charm._name}")
+                # get sentinel info about the primary
+                primary_info = sentinel.execute_command(f"SENTINEL primary {self.charm._name}")
 
-                # NOTE: master info from redis comes like a list:
+                # NOTE: primary info from redis comes like a list:
                 # ['key1', 'value1', 'key2', 'value2', ...]
                 # this creates a dictionary in a more readable form.
-                return dict(zip(master_info[::2], master_info[1::2]))
+                return dict(zip(primary_info[::2], primary_info[1::2]))
 
             except (ConnectionError, TimeoutError) as e:
                 logger.error("Error when connecting to sentinel: {}".format(e))
