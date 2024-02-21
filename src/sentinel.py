@@ -110,7 +110,7 @@ class Sentinel(Object):
             hostname=self.charm.unit_pod_hostname,
             master_name=self.charm._name,
             sentinel_port=SENTINEL_PORT,
-            redis_master=self.charm.current_main,
+            redis_master=self.charm.current_primary,
             redis_port=REDIS_PORT,
             quorum=self.expected_quorum,
             master_password=self.charm._get_password(),

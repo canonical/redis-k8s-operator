@@ -148,4 +148,4 @@ class RedisProvides(Object):
 
     def _get_main_ip(self) -> str:
         """Gets the ip of the current redis main process."""
-        return socket.gethostbyname(self._charm.current_main)
+        return socket.gethostbyname(self._charm.current_primary)
