@@ -197,11 +197,11 @@ class TestCharm(TestCase):
             admin_password,
         )
 
-    @mock.patch.object(RedisProvides, "_get_master_ip")
-    def test_on_relation_changed_status_when_unit_is_leader(self, get_master_ip):
+    @mock.patch.object(RedisProvides, "_get_primary_ip")
+    def test_on_relation_changed_status_when_unit_is_leader(self, get_primary_ip):
         # Given
         self.harness.set_leader(True)
-        get_master_ip.return_value = "10.2.1.5"
+        get_primary_ip.return_value = "10.2.1.5"
 
         rel_id = self.harness.add_relation("redis", "wordpress")
         self.harness.add_relation_unit(rel_id, "wordpress/0")
@@ -390,7 +390,7 @@ class TestCharm(TestCase):
 
         # NOTE: On config changed, charm will be updated with APPLICATION_DATA. But a
         # call to `execute_command(SENTINEL MASTER redis-k8s)` will return `different_leader`
-        # when checking the master, simulating that sentinel triggered failover in between
+        # when checking the primary, simulating that sentinel triggered failover in between
         # charm events.
         self.harness._emit_relation_changed(rel.id, "redis-k8s")
 
@@ -407,7 +407,7 @@ class TestCharm(TestCase):
         self.assertEqual(updated_data["leader-host"], "different-leader")
 
     @mock.patch.object(Redis, "execute_command")
-    def test_forced_failover_when_unit_departed_is_master(self, execute_command):
+    def test_forced_failover_when_unit_departed_is_primary(self, execute_command):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
             mapping = {
@@ -427,7 +427,7 @@ class TestCharm(TestCase):
         rel = self.harness.charm.model.get_relation(self._peer_relation)
         # Simulate an update to the application databag made by the leader unit
         self.harness.update_relation_data(rel.id, "redis-k8s", APPLICATION_DATA)
-        # Add and remove a unit that sentinel will simulate as current master
+        # Add and remove a unit that sentinel will simulate as current primary
         self.harness.add_relation_unit(rel.id, "redis-k8s/1")
 
         rel = self.harness.charm.model.get_relation(self._peer_relation)

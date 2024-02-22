@@ -88,20 +88,20 @@ class RedisK8sCharm(CharmBase):
         # In the event of a pod restart on the same node the upgrade event is not fired.
         # The IP might change, so the data needs to be propagated
         for relation in self.model.relations[REDIS_REL_NAME]:
-            relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.current_master)
+            relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.current_primary)
 
     def _upgrade_charm(self, event: UpgradeCharmEvent) -> None:
         """Handle the upgrade_charm event.
 
         Check for failover status and update connection information for redis relation and
-        current_master.
+        current_primary.
         Also tries to store the certificates on the redis container, as new `juju attach-resource`
         will trigger this event.
         """
         self._store_certificates()
 
         # NOTE: This is the case of a single unit deployment. If that's the case, the charm
-        # doesn't need to check for failovers or figure out who the master is.
+        # doesn't need to check for failovers or figure out who the primary is.
         if not self._peers.units:
             # NOTE: pod restart or charm upgrade can come along with pod IP changes, and
             # during those process, the leader-elected and any relation events are not emitted.
@@ -126,9 +126,9 @@ class RedisK8sCharm(CharmBase):
         # unit is not a leader, add a key to the application databag so peer_relation_changed
         # triggers for the leader unit and application databag is updated.
         if self.unit.is_leader():
-            info = self.sentinel.get_master_info(host=k8s_host)
-            logger.debug(f"Master info: {info}")
-            logger.info(f"Unit {self.unit.name} updating master info to {info['ip']}")
+            info = self.sentinel.get_primary_info(host=k8s_host)
+            logger.debug(f"primary info: {info}")
+            logger.info(f"Unit {self.unit.name} updating primary info to {info['ip']}")
             self._peers.data[self.app][LEADER_HOST_KEY] = info["ip"]
         else:
             relations = self.model.relations[REDIS_REL_NAME]
@@ -150,17 +150,17 @@ class RedisK8sCharm(CharmBase):
         if not self.get_sentinel_password():
             logger.info("Creating sentinel password")
             self._peers.data[self.app][SENTINEL_PASSWORD_KEY] = self._generate_password()
-        # NOTE: if current_master is not set yet, the application is being deployed for the
+        # NOTE: if current_primary is not set yet, the application is being deployed for the
         # first time. Otherwise, we check for failover in case previous juju leader was redis
-        # master as well.
-        if self.current_master is None:
+        # primary as well.
+        if self.current_primary is None:
             logger.info(
                 "Initial replication, setting leader-host to {}".format(self.unit_pod_hostname)
             )
             self._peers.data[self.app][LEADER_HOST_KEY] = self.unit_pod_hostname
         else:
             # TODO extract to method shared with relation_departed
-            self._update_application_master()
+            self._update_application_primary()
             self._update_quorum()
             if not self._is_failover_finished():
                 logger.info("Failover didn't finish, deferring")
@@ -199,21 +199,21 @@ class RedisK8sCharm(CharmBase):
         """
         logger.info("Beginning update_status")
         if self.unit.is_leader():
-            self._update_application_master()
+            self._update_application_primary()
         self._redis_check()
 
     def _peer_relation_changed(self, event):
         """Handle relation for joining units."""
-        if not self._master_up_to_date():
-            logger.error(f"Unit {self.unit.name} doesn't agree on tracked master")
+        if not self._primary_up_to_date():
+            logger.error(f"Unit {self.unit.name} doesn't agree on tracked primary")
             if not self._is_failover_finished():
                 logger.info("Failover didn't finish, deferring")
                 event.defer()
                 return
 
             if self.unit.is_leader():
-                # Update who the current master is
-                self._update_application_master()
+                # Update who the current primary is
+                self._update_application_primary()
 
         # (DEPRECATE) If legacy relation exists, layer might need to be
         # reconfigured to remove auth
@@ -224,7 +224,7 @@ class RedisK8sCharm(CharmBase):
         if relations:
             for relation in relations:
                 relation.data[self.model.unit]["hostname"] = socket.gethostbyname(
-                    self.current_master
+                    self.current_primary
                 )
             if self._peers.data[self.unit].get("upgrading", "false") == "true":
                 self._peers.data[self.unit]["upgrading"] = ""
@@ -247,8 +247,8 @@ class RedisK8sCharm(CharmBase):
         if not self.unit.is_leader():
             return
 
-        if not self._master_up_to_date():
-            self._update_application_master()
+        if not self._primary_up_to_date():
+            self._update_application_primary()
 
         # Quorum is updated beforehand, since removal of more units than current majority
         # could lead to the cluster never reaching quorum.
@@ -376,9 +376,9 @@ class RedisK8sCharm(CharmBase):
                 f"--tls-ca-cert-file {self._storage_path}/ca.crt",
             ]
 
-        # Check that current unit is master
-        if self.current_master != self.unit_pod_hostname:
-            extra_flags += [f"--replicaof {self.current_master} {REDIS_PORT}"]
+        # Check that current unit is primary
+        if self.current_primary != self.unit_pod_hostname:
+            extra_flags += [f"--replicaof {self.current_primary} {REDIS_PORT}"]
 
             if self.config["enable-tls"]:
                 extra_flags += ["--tls-replication yes"]
@@ -455,8 +455,8 @@ class RedisK8sCharm(CharmBase):
         return socket.getfqdn(name)
 
     @property
-    def current_master(self) -> Optional[str]:
-        """Get the current master."""
+    def current_primary(self) -> Optional[str]:
+        """Get the current primary."""
         return self._peers.data[self.app].get(LEADER_HOST_KEY)
 
     def _valid_app_databag(self) -> bool:
@@ -472,7 +472,7 @@ class RedisK8sCharm(CharmBase):
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             password = True
 
-        return bool(password and self.current_master)
+        return bool(password and self.current_primary)
 
     def _generate_password(self) -> str:
         """Generate a random 16 character password string.
@@ -574,38 +574,38 @@ class RedisK8sCharm(CharmBase):
         finally:
             client.close()
 
-    def _master_up_to_date(self, host="0.0.0.0") -> bool:
-        """Check if stored master is the same as sentinel tracked.
+    def _primary_up_to_date(self, host="0.0.0.0") -> bool:
+        """Check if stored primary is the same as sentinel tracked.
 
         Returns:
             host: string to connect to sentinel
         """
-        info = self.sentinel.get_master_info(host=host)
+        info = self.sentinel.get_primary_info(host=host)
         if info is None:
             return False
-        elif (info["ip"] == self.current_master) and ("s_down" not in info["flags"]):
+        elif (info["ip"] == self.current_primary) and ("s_down" not in info["flags"]):
             return True
 
         return False
 
-    def _update_application_master(self) -> None:
-        """Use Sentinel to update the current master hostname."""
-        info = self.sentinel.get_master_info()
-        logger.debug(f"Master info: {info}")
+    def _update_application_primary(self) -> None:
+        """Use Sentinel to update the current primary hostname."""
+        info = self.sentinel.get_primary_info()
+        logger.debug(f"primary info: {info}")
         if info is None:
-            logger.warning("Could not update current master")
+            logger.warning("Could not update current primary")
             return
 
-        logger.info(f"Unit {self.unit.name} updating master info to {info['ip']}")
+        logger.info(f"Unit {self.unit.name} updating primary info to {info['ip']}")
         self._peers.data[self.app][LEADER_HOST_KEY] = info["ip"]
 
     def _sentinel_failover(self, departing_unit_name: str) -> None:
-        """Try to failover the current master.
+        """Try to failover the current primary.
 
         This method should only be called from juju leader, to avoid more than one
         sentinel sending failovers concurrently.
         """
-        if self._k8s_hostname(departing_unit_name) != self.current_master:
+        if self._k8s_hostname(departing_unit_name) != self.current_primary:
             # No failover needed
             return
 
@@ -628,7 +628,7 @@ class RedisK8sCharm(CharmBase):
             True if failover is finished, false otherwise
         """
         logger.warning("Checking if failover is finished.")
-        info = self.sentinel.get_master_info(host=host)
+        info = self.sentinel.get_primary_info(host=host)
         if info is None:
             logger.warning("Could not check failover status")
             return False
