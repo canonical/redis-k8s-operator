@@ -39,6 +39,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
+          channel: 1.28-strict/stable
       - name: Run integration tests
         run: tox -e integration-charm
 
@@ -55,6 +56,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
+          channel: 1.28-strict/stable
       - name: Run integration tests
         run: tox -e integration-relation
 
@@ -71,6 +73,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
+          channel: 1.28-strict/stable
       - name: Run integration tests
         run: tox -e integration-relation -- --num-units 1
 
@@ -87,6 +90,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
+          channel: 1.28-strict/stable
       - name: Run integration tests
         run: tox -e integration-password
 
@@ -103,5 +107,6 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
+          channel: 1.28-strict/stable
       - name: Run integration tests
         run: tox -e integration-scaling
