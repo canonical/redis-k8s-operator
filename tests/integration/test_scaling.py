@@ -75,7 +75,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
     time.sleep(60)
 
     await ops_test.model.block_until(
-        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL primary {APP_NAME}"),
+        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}"),
         timeout=60,
     )
 
@@ -94,7 +94,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
         timeout=1000,
     )
 
-    primary_info = sentinel.execute_command(f"SENTINEL primary {APP_NAME}")
+    primary_info = sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
     primary_info = dict(zip(primary_info[::2], primary_info[1::2]))
 
     # General checks that the system is aware of the new unit
@@ -131,7 +131,7 @@ async def test_scale_down_departing_primary(ops_test: OpsTest):
 
     # INITIAL SETUP #
     # Sanity check that the added unit on the previous test is not a primary
-    assert last_redis.execute_command("ROLE")[0] != "primary"
+    assert last_redis.execute_command("ROLE")[0] != "master"
 
     # Make the added unit a priority during failover
     last_redis.execute_command("CONFIG SET replica-priority 1")
@@ -142,10 +142,10 @@ async def test_scale_down_departing_primary(ops_test: OpsTest):
     time.sleep(60)
 
     await ops_test.model.block_until(
-        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL primary {APP_NAME}"),
+        lambda: "failover-status" not in sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}"),
         timeout=60,
     )
-    assert last_redis.execute_command("ROLE")[0] == "primary"
+    assert last_redis.execute_command("ROLE")[0] == "master"
     last_redis.close()
 
     # SCALE DOWN #
@@ -158,7 +158,7 @@ async def test_scale_down_departing_primary(ops_test: OpsTest):
         assert client.get("testKey") == b"myValue"
         client.close()
 
-    primary_info = sentinel.execute_command(f"SENTINEL primary {APP_NAME}")
+    primary_info = sentinel.execute_command(f"SENTINEL MASTER {APP_NAME}")
     primary_info = dict(zip(primary_info[::2], primary_info[1::2]))
 
     # General checks that the system is reconfigured after departed leader

@@ -352,7 +352,7 @@ class RedisK8sCharm(CharmBase):
         extra_flags = [
             f"--requirepass {self._get_password()}",
             "--bind 0.0.0.0",
-            f"--primaryauth {self._get_password()}",
+            f"--masterauth {self._get_password()}",
             f"--replica-announce-ip {self.unit_pod_hostname}",
         ]
 

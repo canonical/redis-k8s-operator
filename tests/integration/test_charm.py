@@ -113,7 +113,7 @@ async def test_sentinels_expected(ops_test: OpsTest):
     logger.info("retrieved sentinel password for %s: %s", APP_NAME, password)
 
     sentinel = Redis(address, password=password, port=26379)
-    sentinels_connected = sentinel.info("sentinel")["primary0"]["sentinels"]
+    sentinels_connected = sentinel.info("sentinel")["master0"]["sentinels"]
 
     assert sentinels_connected == NUM_UNITS
 

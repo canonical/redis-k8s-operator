@@ -152,7 +152,7 @@ class Sentinel(Object):
         with self.sentinel_client(host) as sentinel:
             try:
                 # get sentinel info about the primary
-                primary_info = sentinel.execute_command(f"SENTINEL primary {self.charm._name}")
+                primary_info = sentinel.execute_command(f"SENTINEL MASTER {self.charm._name}")
 
                 # NOTE: primary info from redis comes like a list:
                 # ['key1', 'value1', 'key2', 'value2', ...]
