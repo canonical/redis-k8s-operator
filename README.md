@@ -1,4 +1,5 @@
 # Redis Operator
+[![Charmhub](https://charmhub.io/redis-k8s/badge.svg)](https://charmhub.io/redis-k8s)
 [![Release to latest/edge](https://github.com/canonical/redis-k8s-operator/actions/workflows/release.yaml/badge.svg)](https://github.com/canonical/redis-k8s-operator/actions/workflows/release.yaml)
 [![Tests](https://github.com/canonical/redis-k8s-operator/actions/workflows/ci.yaml/badge.svg)](https://github.com/canonical/redis-k8s-operator/actions/workflows/ci.yaml)
 
