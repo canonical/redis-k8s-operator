@@ -1,4 +1,6 @@
 # Redis Operator
+[![Release to latest/edge](https://github.com/canonical/redis-k8s-operator/actions/workflows/release.yaml/badge.svg)](https://github.com/canonical/redis-k8s-operator/actions/workflows/release.yaml)
+[![Tests](https://github.com/canonical/redis-k8s-operator/actions/workflows/ci.yaml/badge.svg)](https://github.com/canonical/redis-k8s-operator/actions/workflows/ci.yaml)
 
 A Juju charm deploying and managing Redis on Kubernetes.
 
