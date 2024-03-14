@@ -46,10 +46,10 @@ jobs:
       fail-fast: false
       matrix:
         tox-environments:
-          - charm
-          - password
-          - redis-relation
-          - scaling
+          - integration-charm
+          - integration-password
+          - integration-redis-relation
+          - integration-scaling
     name: ${{ matrix.tox-environments }}
     needs:
       - lint
