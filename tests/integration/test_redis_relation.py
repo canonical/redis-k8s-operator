@@ -10,8 +10,9 @@ from lightkube import AsyncClient
 from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
 
-from tests.helpers import APP_NAME, METADATA
-from tests.integration.helpers import (
+from .helpers import (
+    APP_NAME,
+    METADATA,
     check_application_status,
     get_address,
     get_unit_map,

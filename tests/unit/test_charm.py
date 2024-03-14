@@ -19,7 +19,11 @@ from redis import Redis
 from redis.exceptions import RedisError
 
 from charm import RedisK8sCharm
-from tests.helpers import APPLICATION_DATA
+
+APPLICATION_DATA = {
+    "leader-host": "leader-host",
+    "redis-password": "password",
+}
 
 
 class TestCharm(TestCase):
