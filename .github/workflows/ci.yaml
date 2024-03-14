@@ -126,7 +126,7 @@ jobs:
         env:
           CI_PACKED_CHARMS: ${{ needs.build.outputs.charms }}
 
-integration-test-scaling:
+  integration-test-scaling:
     name: integration-scaling
     needs:
       - lint
