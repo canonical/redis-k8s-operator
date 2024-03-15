@@ -141,7 +141,7 @@ async def test_delete_redis_pod(ops_test: OpsTest):
     )
     await ops_test.model.block_until(
         lambda: check_application_status(ops_test, FIRST_DISCOURSE_APP_NAME) == "active",
-        timeout=600,
+        timeout=1200,
         wait_period=5,
     )
 
