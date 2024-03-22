@@ -5,12 +5,26 @@
 """Helpers for integration tests."""
 import logging
 import subprocess
+from pathlib import Path
 from urllib.request import urlopen
 
+import yaml
 from pytest_operator.plugin import OpsTest
 from tenacity import before_log, retry, stop_after_attempt, wait_fixed
 
-from tests.helpers import APP_NAME
+METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
+APP_NAME = METADATA["name"]
+STORAGE_PATH = METADATA["storage"]["database"]["location"]
+TLS_RESOURCES = {
+    "cert-file": "tests/tls/redis.crt",
+    "key-file": "tests/tls/redis.key",
+    "ca-cert-file": "tests/tls/ca.crt",
+}
+APPLICATION_DATA = {
+    "leader-host": "leader-host",
+    "redis-password": "password",
+}
+NUM_UNITS = 3
 
 logger = logging.getLogger(__name__)
 

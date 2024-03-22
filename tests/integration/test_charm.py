@@ -2,7 +2,6 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-
 import logging
 
 import pytest
@@ -11,8 +10,11 @@ from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
 from redis import Redis
 
-from tests.helpers import APP_NAME, METADATA, NUM_UNITS, TLS_RESOURCES
-from tests.integration.helpers import (
+from .helpers import (
+    APP_NAME,
+    METADATA,
+    NUM_UNITS,
+    TLS_RESOURCES,
     attach_resource,
     change_config,
     get_address,
