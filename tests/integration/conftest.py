@@ -1,7 +1,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-from tests.helpers import NUM_UNITS
+from .helpers import NUM_UNITS
 
 
 def pytest_addoption(parser):
