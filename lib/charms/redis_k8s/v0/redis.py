@@ -51,7 +51,7 @@ LIBPATCH = 5
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_REALTION_NAME = "redis"
+DEFAULT_RELATION_NAME = "redis"
 
 class RedisRelationUpdatedEvent(EventBase):
     """An event for the redis relation having been updated."""
@@ -64,7 +64,7 @@ class RedisRelationCharmEvents(CharmEvents):
 
 class RedisRequires(Object):
 
-    def __init__(self, charm, _stored, relation_name: str = DEFAULT_REALTION_NAME):
+    def __init__(self, charm, _stored, relation_name: str = DEFAULT_RELATION_NAME):
         """A class implementing the redis requires relation."""
         super().__init__(charm, relation_name)
         self.framework.observe(charm.on[relation_name].relation_joined, self._on_relation_changed)
@@ -125,7 +125,7 @@ class RedisRequires(Object):
 class RedisProvides(Object):
     def __init__(self, charm, port):
         """A class implementing the redis provides relation."""
-        super().__init__(charm, DEFAULT_REALTION_NAME)
+        super().__init__(charm, DEFAULT_RELATION_NAME)
         self.framework.observe(charm.on.redis_relation_changed, self._on_relation_changed)
         self._port = port
         self._charm = charm
@@ -144,7 +144,7 @@ class RedisProvides(Object):
         relation = self.model.get_relation(event.relation.name, event.relation.id)
         if address := self.model.get_binding(relation).network.bind_address:
             return address
-        return self.app.name
+        return self._charm.app.name
 
     def _get_master_ip(self) -> str:
         """Gets the ip of the current redis master."""
