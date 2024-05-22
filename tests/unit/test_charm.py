@@ -86,6 +86,7 @@ class TestCharm(TestCase):
         self.harness.set_leader(True)
         info.return_value = {"redis_version": "6.0.11"}
         self.harness.update_config()
+        self.harness.charm.on.update_status.emit()
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
@@ -119,6 +120,7 @@ class TestCharm(TestCase):
         self.harness.set_leader(True)
         info.side_effect = RedisError("Error connecting to redis")
         self.harness.update_config()
+        self.harness.charm.on.update_status.emit()
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
@@ -285,6 +287,7 @@ class TestCharm(TestCase):
         _store_certificates.assert_called()
 
         self.harness.update_config({"enable-tls": True})
+        self.harness.charm.on.update_status.emit()
 
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
