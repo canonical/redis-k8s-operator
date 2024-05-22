@@ -48,6 +48,7 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
             "cert-file": METADATA["resources"]["cert-file"]["filename"],
             "key-file": METADATA["resources"]["key-file"]["filename"],
             "ca-cert-file": METADATA["resources"]["ca-cert-file"]["filename"],
+            "exporter": METADATA["resources"]["exporter"]["upstream"],
         }
         await asyncio.gather(
             ops_test.model.deploy(
