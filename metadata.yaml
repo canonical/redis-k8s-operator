@@ -58,7 +58,7 @@ resources:
   exporter:
     type: oci-image
     description: redis exporter for prometheus metrics
-    upstream: oliver006/redis_exporter
+    upstream: docker.io/oliver006/redis_exporter
   cert-file:
     type: file
     filename: redis.crt
