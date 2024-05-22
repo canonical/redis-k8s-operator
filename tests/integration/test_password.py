@@ -2,7 +2,6 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-
 import logging
 
 import pytest
@@ -10,8 +9,7 @@ from pytest_operator.plugin import OpsTest
 from redis import Redis
 from redis.exceptions import AuthenticationError
 
-from tests.helpers import APP_NAME, METADATA
-from tests.integration.helpers import get_address, get_password
+from .helpers import APP_NAME, METADATA, get_address, get_password
 
 logger = logging.getLogger(__name__)
 
