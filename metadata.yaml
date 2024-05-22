@@ -54,7 +54,7 @@ resources:
   redis-image:
     type: oci-image
     description: ubuntu lts docker image for redis
-    upstream: dataplatformoci/redis:7.0-22.04_edge
+    upstream: ghcr.io/canonical/charmed-redis:7.0-22.04_edge
   exporter:
     type: oci-image
     description: redis exporter for prometheus metrics
