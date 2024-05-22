@@ -92,7 +92,7 @@ class TestCharm(TestCase):
             "--bind 0.0.0.0",
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
-            "--logfile /var/log/redis/redis-server.log"
+            "--logfile /var/log/redis/redis-server.log",
         ]
         expected_plan = {
             "services": {
@@ -125,7 +125,7 @@ class TestCharm(TestCase):
             "--bind 0.0.0.0",
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
-            "--logfile /var/log/redis/redis-server.log"
+            "--logfile /var/log/redis/redis-server.log",
         ]
         expected_plan = {
             "services": {
