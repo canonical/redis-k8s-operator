@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_RELATION_NAME = "redis"
 
+
 class RedisRelationUpdatedEvent(EventBase):
     """An event for the redis relation having been updated."""
 
