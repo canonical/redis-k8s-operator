@@ -35,11 +35,11 @@ from ops.framework import EventBase, EventSource, Object
 LIBID = "fe18a608cec5465fa5153e419abcad7b"
 
 # Increment this major API version when introducing breaking changes.
-LIBAPI = 1
+LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version.
-LIBPATCH = 0
+LIBPATCH = 6
 
 logger = logging.getLogger(__name__)
 
