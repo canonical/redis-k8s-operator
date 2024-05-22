@@ -2,7 +2,6 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-
 import logging
 import time
 
@@ -10,8 +9,10 @@ import pytest
 from pytest_operator.plugin import OpsTest
 from redis import Redis
 
-from tests.helpers import APP_NAME, METADATA, NUM_UNITS
-from tests.integration.helpers import (
+from .helpers import (
+    APP_NAME,
+    METADATA,
+    NUM_UNITS,
     get_address,
     get_password,
     get_sentinel_password,

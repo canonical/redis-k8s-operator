@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 
 name: redis-k8s
-display-name: Redis
+display-name: Charmed Redis
 docs: https://discourse.charmhub.io/t/redis-docs-index/4571
 description: >
   Redis charm for Kubernetes deployments.

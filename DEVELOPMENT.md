@@ -22,7 +22,7 @@ It connects to a controller. The controller is hosted on a cloud and controls mo
 Then you build and deploy this charm into the model you just created:
     
     charmcraft pack
-    juju deploy ./redis-k8s_ubuntu-20.04-amd64.charm --resource redis-image=dataplatformoci/redis:7.0-22.04_edge
+    juju deploy ./redis-k8s_ubuntu-20.04-amd64.charm --resource redis-image=ghcr.io/canonical/charmed-redis:7.0-22.04_edge
 
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:

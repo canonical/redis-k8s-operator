@@ -108,6 +108,10 @@ class RedisK8sCharm(CharmBase):
         if not isinstance(self.unit.status, ActiveStatus):
             event.defer()
             return
+        # In the event of a pod restart on the same node the upgrade event is not fired.
+        # The IP might change, so the data needs to be propagated
+        for relation in self.model.relations[REDIS_REL_NAME]:
+            relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.current_master)
 
     def _upgrade_charm(self, event: UpgradeCharmEvent) -> None:
         """Handle the upgrade_charm event.
@@ -122,6 +126,15 @@ class RedisK8sCharm(CharmBase):
         # NOTE: This is the case of a single unit deployment. If that's the case, the charm
         # doesn't need to check for failovers or figure out who the master is.
         if not self._peers.units:
+            # NOTE: pod restart or charm upgrade can come along with pod IP changes, and
+            # during those process, the leader-elected and any relation events are not emitted.
+            # It's the responsibility of upgrade-charm handler to update relation data in the
+            # case of the single unit deployment.
+            self._peers.data[self.app][LEADER_HOST_KEY] = self.unit_pod_hostname
+            for relation in self.model.relations[REDIS_REL_NAME]:
+                relation.data[self.model.unit]["hostname"] = socket.gethostbyname(
+                    self.unit_pod_hostname
+                )
             return
 
         # Pick a different unit to connect to sentinel
@@ -141,8 +154,8 @@ class RedisK8sCharm(CharmBase):
             logger.info(f"Unit {self.unit.name} updating master info to {info['ip']}")
             self._peers.data[self.app][LEADER_HOST_KEY] = info["ip"]
         else:
-            relation = self.model.get_relation(relation_name=REDIS_REL_NAME)
-            if relation:
+            relations = self.model.relations[REDIS_REL_NAME]
+            if relations:
                 self._peers.data[self.unit]["upgrading"] = "true"
 
     def _leader_elected(self, event) -> None:
@@ -231,9 +244,12 @@ class RedisK8sCharm(CharmBase):
         if self._peers.data[self.app].get("enable-password", "true") == "false":
             self._update_layer()
 
-        relation = self.model.get_relation(relation_name=REDIS_REL_NAME)
-        if relation:
-            relation.data[self.model.unit]["hostname"] = socket.gethostbyname(self.current_master)
+        relations = self.model.relations[REDIS_REL_NAME]
+        if relations:
+            for relation in relations:
+                relation.data[self.model.unit]["hostname"] = socket.gethostbyname(
+                    self.current_master
+                )
             if self._peers.data[self.unit].get("upgrading", "false") == "true":
                 self._peers.data[self.unit]["upgrading"] = ""
 

@@ -19,7 +19,11 @@ from redis import Redis
 from redis.exceptions import RedisError
 
 from charm import RedisK8sCharm
-from tests.helpers import APPLICATION_DATA
+
+APPLICATION_DATA = {
+    "leader-host": "leader-host",
+    "redis-password": "password",
+}
 
 
 class TestCharm(TestCase):
@@ -28,6 +32,8 @@ class TestCharm(TestCase):
 
         self.harness = Harness(RedisK8sCharm)
         self.addCleanup(self.harness.cleanup)
+        self.harness.set_can_connect("redis", True)
+        self.harness.set_can_connect("sentinel", True)
         self.harness.begin()
         self.harness.add_relation(self._peer_relation, self.harness.charm.app.name)
 
@@ -251,6 +257,7 @@ class TestCharm(TestCase):
         # After adding them, check that the property returns paths for the three of them
         self.assertTrue(None not in self.harness.charm._certificates)
 
+        self.harness.set_leader(True)
         self.harness.charm.on.upgrade_charm.emit()
         _store_certificates.assert_called()
 
