@@ -63,7 +63,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
 
     # Set some key on the master replica.
     leader_client = Redis(leader_address, password=password)
-    leader_client.set("testKey", "myValue")
+    await leader_client.set("testKey", "myValue")
     leader_client.close()
 
     sentinel_password = await get_sentinel_password(ops_test)
@@ -80,7 +80,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
         timeout=60,
     )
 
-    await ops_test.model.applications[APP_NAME].scale(count=NUM_UNITS + 1)
+    await ops_test.model.applications[APP_NAME].scale(scale=NUM_UNITS + 1)
     await ops_test.model.block_until(
         lambda: len(ops_test.model.applications[APP_NAME].units) == NUM_UNITS + 1,
         timeout=300,
