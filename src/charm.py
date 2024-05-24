@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 Canonical Ltd.
+# Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 """Charm code for Redis service."""
@@ -183,7 +183,7 @@ class RedisK8sCharm(CharmBase):
             return
 
         self._update_layer()
-        self.sentinel._update_sentinel_layer()
+        self.sentinel.update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
         if not isinstance(self.unit.status, ActiveStatus):
@@ -258,7 +258,7 @@ class RedisK8sCharm(CharmBase):
         if not self._is_failover_finished():
             msg = "Failover didn't finish, deferring"
             logger.info(msg)
-            self.unit.status == WaitingStatus(msg)
+            self.unit.status = WaitingStatus(msg)
             event.defer()
             return
 
@@ -267,7 +267,7 @@ class RedisK8sCharm(CharmBase):
         except RedisError as e:
             msg = f"Error on failover: {e}"
             logger.error(msg)
-            self.unit.status == BlockedStatus(msg)
+            self.unit.status = BlockedStatus(msg)
             return
 
         logger.info("Resetting sentinel")
@@ -302,7 +302,7 @@ class RedisK8sCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
             return
 
-        if not self._valid_app_databag():
+        if not self.valid_app_databag():
             self.unit.status = WaitingStatus("Waiting for peer data to be updated")
             return
 
@@ -385,7 +385,7 @@ class RedisK8sCharm(CharmBase):
 
         return " ".join(extra_flags)
 
-    def _redis_check(self) -> None:
+    def _redis_check(self) -> bool:
         """Checks if the Redis database is active."""
         try:
             with self._redis_client() as redis:
@@ -459,7 +459,7 @@ class RedisK8sCharm(CharmBase):
         """Get the current master."""
         return self._peers.data[self.app].get(LEADER_HOST_KEY)
 
-    def _valid_app_databag(self) -> bool:
+    def valid_app_databag(self) -> bool:
         """Check if the peer databag has been populated.
 
         Returns:
@@ -474,14 +474,15 @@ class RedisK8sCharm(CharmBase):
 
         return bool(password and self.current_master)
 
-    def _generate_password(self) -> str:
+    @staticmethod
+    def _generate_password() -> str:
         """Generate a random 16 character password string.
 
         Returns:
            A random password string.
         """
         choices = string.ascii_letters + string.digits
-        password = "".join([secrets.choice(choices) for i in range(16)])
+        password = "".join([secrets.choice(choices) for _ in range(16)])
         return password
 
     def _get_password(self) -> Optional[str]:
@@ -517,7 +518,7 @@ class RedisK8sCharm(CharmBase):
         for cert_path in cert_paths:
             with open(cert_path, "r") as f:
                 container.push(
-                    (f"{self._storage_path}/{cert_path.name}"),
+                    f"{self._storage_path}/{cert_path.name}",
                     f,
                     make_dirs=True,
                     permissions=0o600,

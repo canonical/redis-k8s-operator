@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 Canonical Ltd.
+# Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 import logging
@@ -80,7 +80,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
         timeout=60,
     )
 
-    await ops_test.model.applications[APP_NAME].scale(scale=NUM_UNITS + 1)
+    await ops_test.model.applications[APP_NAME].scale(count=NUM_UNITS + 1)
     await ops_test.model.block_until(
         lambda: len(ops_test.model.applications[APP_NAME].units) == NUM_UNITS + 1,
         timeout=300,
@@ -150,7 +150,7 @@ async def test_scale_down_departing_master(ops_test: OpsTest):
     last_redis.close()
 
     # SCALE DOWN #
-    await scale(ops_test, scale=NUM_UNITS)
+    await scale(ops_test, count=NUM_UNITS)
 
     # Check that the initial key is still replicated across units
     for i in range(NUM_UNITS):
