@@ -3,7 +3,7 @@
 name: Tests
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
 
 on:
@@ -64,9 +64,9 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
-          channel: "1.28-strict/stable"
+          channel: "1.29-strict/stable"
           juju-channel: 2.9/stable
-          bootstrap-options: "--agent-version 2.9.43"
+          bootstrap-options: "--agent-version 2.9.49"
       - name: Download packed charm(s)
         uses: actions/download-artifact@v3
         with:
@@ -103,9 +103,9 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
-          channel: "1.28-strict/stable"
+          channel: "1.29-strict/stable"
           juju-channel: 2.9/stable
-          bootstrap-options: "--agent-version 2.9.43"
+          bootstrap-options: "--agent-version 2.9.49"
       - name: Download packed charm(s)
         uses: actions/download-artifact@v3
         with:
@@ -142,9 +142,9 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
-          channel: "1.28-strict/stable"
+          channel: "1.29-strict/stable"
           juju-channel: 2.9/stable
-          bootstrap-options: "--agent-version 2.9.29"
+          bootstrap-options: "--agent-version 2.9.49"
       - name: Download packed charm(s)
         uses: actions/download-artifact@v3
         with:
