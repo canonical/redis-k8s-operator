@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 Canonical Ltd.
+# Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 
@@ -45,14 +45,14 @@ class Sentinel(Object):
 
     def _sentinel_pebble_ready(self, event) -> None:
         """Handle pebble ready event for sentinel container."""
-        self._update_sentinel_layer()
+        self.update_layer()
 
         # update layer should leave the unit in active status
         if not isinstance(self.charm.unit.status, ActiveStatus):
             event.defer()
             return
 
-    def _update_sentinel_layer(self) -> None:
+    def update_layer(self) -> None:
         """Update the Pebble layer.
 
         Checks the current container Pebble layer. If the layer is different
@@ -64,7 +64,7 @@ class Sentinel(Object):
             self.charm.unit.status = WaitingStatus("Waiting for Pebble in sentinel container")
             return
 
-        if not self.charm._valid_app_databag():
+        if not self.charm.valid_app_databag():
             self.charm.unit.status = WaitingStatus("Databag has not been populated")
             return
 
@@ -72,13 +72,14 @@ class Sentinel(Object):
         self._render_sentinel_config_file()
 
         # Create the new config layer
-        new_layer = self._sentinel_layer()
+        new_layer = self._layer()
 
         # Update the Pebble configuration Layer
         container.add_layer("sentinel", new_layer, combine=True)
         container.replan()
 
-    def _sentinel_layer(self) -> Layer:
+    @staticmethod
+    def _layer() -> Layer:
         """Create the Pebble configuration layer for Redis Sentinel.
 
         Returns:

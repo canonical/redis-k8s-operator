@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 Canonical Ltd.
+# Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 """Helpers for integration tests."""
@@ -29,11 +29,11 @@ NUM_UNITS = 3
 logger = logging.getLogger(__name__)
 
 
-async def scale(ops_test: OpsTest, scale: int) -> None:
+async def scale(ops_test: OpsTest, count: int) -> None:
     """Scale the application to the provided number and wait for idle."""
-    await ops_test.model.applications[APP_NAME].scale(scale=scale)
+    await ops_test.model.applications[APP_NAME].scale(scale=count)
     await ops_test.model.block_until(
-        lambda: len(ops_test.model.applications[APP_NAME].units) == scale
+        lambda: len(ops_test.model.applications[APP_NAME].units) == count
     )
 
     # Wait for model to settle
@@ -148,7 +148,7 @@ def get_unit_number(unit_name: str) -> str:
     before=before_log(logger, logging.DEBUG),
 )
 def query_url(url: str):
-    """Connect to a url and return the result."""
+    """Connect to an url and return the result."""
     logger.info("Trying to connect to: {}".format(url))
     response = urlopen(url)
 
