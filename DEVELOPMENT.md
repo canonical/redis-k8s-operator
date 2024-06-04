@@ -22,7 +22,7 @@ It connects to a controller. The controller is hosted on a cloud and controls mo
 Then you build and deploy this charm into the model you just created:
     
     charmcraft pack
-    juju deploy ./redis-k8s_ubuntu-20.04-amd64.charm --resource redis-image=ghcr.io/canonical/charmed-redis:7.0-22.04_edge
+    juju deploy ./redis-k8s_ubuntu-22.04-amd64.charm --resource redis-image=ghcr.io/canonical/charmed-redis:7.0-22.04_edge
 
 Once Redis starts up it will be running on its default port, 6379. 
 To check it you run:
@@ -36,7 +36,7 @@ to discover the IP Redis is running behind. The output will have lines like:
 
 To retrieve the password to access the database, use the `get-initial-admin-password` action:
 
-    juju run-action redis-k8s/0 get-initial-admin-password --wait
+    juju run redis-k8s/0 get-initial-admin-password --wait
 
 Then, from your local machine, you can:
 
@@ -71,7 +71,7 @@ In order to check the result of a modification, rebuild and upgrade the charm:
 
     # Consider now that you are inside redis-k8s directory.
     charmcraft pack
-    juju upgrade-charm --path="./redis-k8s_ubuntu-20.04-amd64.charm" redis-k8s --force-units
+    juju refresh --path="./redis-k8s_ubuntu-20.04-amd64.charm" redis-k8s --force-units
 
 Or you can clean up things on different levels, application, model, and controller:
 
