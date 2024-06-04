@@ -48,7 +48,7 @@
       }
     ]
   },
-  "description": "Redis Dashboard for Prometheus Redis Exporter 1.x, it works with helm stable/redis-ha exporter.\r\n\r\nIf you missing redis memory utilization, please modify \"maxmemory\" value in values.yaml",
+  "description": "Redis Dashboard for Prometheus Redis Exporter"
   "editable": true,
   "gnetId": 11835,
   "graphTooltip": 0,
@@ -236,26 +236,50 @@
       ],
       "valueName": "current"
     },
-    {
-      "cacheTimeout": null,
-      "colorBackground": false,
-      "colorValue": false,
-      "colors": [
-        "rgba(50, 172, 45, 0.97)",
-        "rgba(237, 129, 40, 0.89)",
-        "rgba(245, 54, 54, 0.9)"
-      ],
-      "datasource": "${prometheusds}",
-      "decimals": 0,
-      "editable": true,
-      "error": false,
-      "format": "percent",
-      "gauge": {
-        "maxValue": 100,
-        "minValue": 0,
-        "show": true,
-        "thresholdLabels": false,
-        "thresholdMarkers": true
+        {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prometheusds}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "N/A"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "rgba(50, 172, 45, 0.97)",
+                "value": null
+              },
+              {
+                "color": "rgba(237, 129, 40, 0.89)",
+                "value": 80
+              },
+              {
+                "color": "rgba(245, 54, 54, 0.9)",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -265,67 +289,42 @@
       },
       "hideTimeOverride": true,
       "id": 11,
-      "interval": null,
-      "isNew": true,
       "links": [],
-      "mappingType": 1,
-      "mappingTypes": [
-        {
-          "name": "value to text",
-          "value": 1
-        },
-        {
-          "name": "range to text",
-          "value": 2
-        }
-      ],
       "maxDataPoints": 100,
-      "nullPointMode": "connected",
-      "nullText": null,
-      "options": {},
-      "postfix": "",
-      "postfixFontSize": "50%",
-      "prefix": "",
-      "prefixFontSize": "50%",
-      "rangeMaps": [
-        {
-          "from": "null",
-          "text": "N/A",
-          "to": "null"
-        }
-      ],
-      "sparkline": {
-        "fillColor": "rgba(31, 118, 189, 0.18)",
-        "full": false,
-        "lineColor": "rgb(31, 120, 193)",
-        "show": true
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
       },
-      "tableColumn": "",
+      "pluginVersion": "9.5.3",
       "targets": [
         {
-          "expr": "100 * (redis_memory_used_bytes{instance=~\"$instance\"}  / redis_memory_max_bytes{instance=~\"$instance\"} )",
+          "datasource": {
+            "uid": "${prometheusds}"
+          },
+          "editorMode": "code",
+          "expr": "redis_memory_used_bytes{instance=~\"$instance\",juju_application=~\"$juju_application\",juju_model=~\"$juju_model\",juju_model_uuid=~\"$juju_model_uuid\",juju_unit=~\"$juju_unit\"}/1000/1000",
           "format": "time_series",
           "intervalFactor": 2,
           "legendFormat": "",
           "metric": "",
+          "range": true,
           "refId": "A",
           "step": 2
         }
       ],
-      "thresholds": "80,95",
       "timeFrom": "1m",
-      "timeShift": null,
-      "title": "Memory Usage",
-      "type": "singlestat",
-      "valueFontSize": "80%",
-      "valueMaps": [
-        {
-          "op": "=",
-          "text": "N/A",
-          "value": "null"
-        }
-      ],
-      "valueName": "current"
+      "title": "Memory Usage in MByte",
+      "type": "stat"
     },
     {
       "aliasColors": {},
@@ -1393,7 +1392,7 @@
     ]
   },
   "timezone": "browser",
-  "title": "Redis Dashboard for Prometheus Redis Exporter (helm stable/redis-ha)",
+  "title": "Redis Dashboard for Prometheus Redis Exporter",
   "uid": "xDLNRKUWz",
   "version": 4
 }
