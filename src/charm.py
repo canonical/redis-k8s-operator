@@ -29,6 +29,7 @@ from literals import (
     LEADER_HOST_KEY,
     LOG_DIR,
     LOG_FILE,
+    METRICS_PORT,
     PEER,
     PEER_PASSWORD_KEY,
     REDIS_PORT,
@@ -65,7 +66,7 @@ class RedisK8sCharm(CharmBase):
                 {
                     "static_configs": [
                         {
-                            "targets": ["*:9121"],
+                            "targets": [f"*:{METRICS_PORT}"],
                         }
                     ]
                 }
