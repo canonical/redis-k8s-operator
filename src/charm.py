@@ -34,6 +34,7 @@ from literals import (
     PEER_PASSWORD_KEY,
     REDIS_PORT,
     REDIS_REL_NAME,
+    REDIS_USER,
     SENTINEL_PASSWORD_KEY,
     SOCKET_TIMEOUT,
     WAITING_MESSAGE,
@@ -332,8 +333,8 @@ class RedisK8sCharm(CharmBase):
                 LOG_DIR,
                 make_parents=True,
                 permissions=0o770,
-                user="redis",
-                group="redis",
+                user=REDIS_USER,
+                group=REDIS_USER,
             )
 
         if not self._valid_app_databag():
