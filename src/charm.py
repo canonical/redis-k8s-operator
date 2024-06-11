@@ -412,6 +412,8 @@ class RedisK8sCharm(CharmBase):
                 f"--replica-announce-ip {self.unit_pod_hostname}",
                 "--protected-mode no",
                 f"--logfile {LOG_FILE}",
+                "--appendonly yes",
+                f"--dir {WORKING_DIR}",
             ]
 
         if self.config["enable-tls"]:
