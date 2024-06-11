@@ -41,7 +41,6 @@ async def test_build_and_deploy(ops_test: OpsTest):
         "cert-file": METADATA["resources"]["cert-file"]["filename"],
         "key-file": METADATA["resources"]["key-file"]["filename"],
         "ca-cert-file": METADATA["resources"]["ca-cert-file"]["filename"],
-        "exporter": METADATA["resources"]["exporter"]["upstream"],
     }
     await ops_test.model.deploy(
         charm, resources=resources, application_name=APP_NAME, num_units=NUM_UNITS
