@@ -47,18 +47,12 @@ containers:
         location: /var/lib/redis
   sentinel:
     resource: redis-image
-  exporter:
-    resource: exporter
 
 resources:
   redis-image:
     type: oci-image
     description: ubuntu lts docker image for redis
-    upstream: ghcr.io/canonical/charmed-redis:7.0-22.04_edge
-  exporter:
-    type: oci-image
-    description: redis exporter for prometheus metrics
-    upstream: docker.io/oliver006/redis_exporter:v1.59.0
+    upstream: ghcr.io/canonical/charmed-redis:7.2.5-22.04-edge
   cert-file:
     type: file
     filename: redis.crt

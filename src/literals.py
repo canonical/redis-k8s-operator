@@ -20,4 +20,5 @@ METRICS_PORT = 9121
 LOG_DIR = "/var/log/redis"
 LOG_FILE = f"{LOG_DIR}/redis-server.log"
 CONFIG_DIR = "/etc/redis-server"
+WORKING_DIR = "/var/lib/redis/"
 SENTINEL_CONFIG_PATH = f"{CONFIG_DIR}/sentinel.conf"

@@ -38,8 +38,8 @@ from literals import (
     SENTINEL_PASSWORD_KEY,
     SOCKET_TIMEOUT,
     WAITING_MESSAGE,
+    WORKING_DIR,
 )
-from redis_exporter import Exporter
 from sentinel import Sentinel
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,6 @@ class RedisK8sCharm(CharmBase):
         self._namespace = self.model.name
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
         self.sentinel = Sentinel(self)
-        self.exporter = Exporter(self)
         self.metrics_endpoint = MetricsEndpointProvider(
             self,
             jobs=[
@@ -209,7 +208,6 @@ class RedisK8sCharm(CharmBase):
 
         self._update_layer()
         self.sentinel._update_sentinel_layer()
-        self.exporter._update_exporter_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
         if not isinstance(self.unit.status, ActiveStatus):
@@ -351,8 +349,8 @@ class RedisK8sCharm(CharmBase):
         if current_layer.services != new_layer.services:
             container.add_layer("redis", new_layer, combine=True)
             logger.info("Added updated layer 'redis' to Pebble plan")
-            container.restart("redis")
-            logger.info("Restarted redis service")
+            container.restart("redis", "redis_exporter")
+            logger.info("Restarted redis and redis_exporter services")
 
         self.unit.status = ActiveStatus()
 
@@ -370,9 +368,20 @@ class RedisK8sCharm(CharmBase):
                     "override": "replace",
                     "summary": "Redis service",
                     "command": f"redis-server {self._redis_extra_flags()}",
-                    "user": "redis",
-                    "group": "redis",
+                    "user": REDIS_USER,
+                    "group": REDIS_USER,
                     "startup": "enabled",
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": REDIS_USER,
+                    "group": REDIS_USER,
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self._get_password(),
+                    },
                 }
             },
         }
@@ -390,6 +399,8 @@ class RedisK8sCharm(CharmBase):
             f"--masterauth {self._get_password()}",
             f"--replica-announce-ip {self.unit_pod_hostname}",
             f"--logfile {LOG_FILE}",
+            "--appendonly yes",
+            f"--dir {WORKING_DIR}",
         ]
 
         if self._peers.data[self.app].get("enable-password", "true") == "false":
