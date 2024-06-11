@@ -95,7 +95,7 @@ class TestCharm(TestCase):
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
             "--appendonly yes",
-            f"--dir /var/lib/redis/",
+            "--dir /var/lib/redis/",
         ]
         expected_plan = {
             "services": {
@@ -116,8 +116,8 @@ class TestCharm(TestCase):
                     "startup": "enabled",
                     "environment": {
                         "REDIS_PASSWORD": self.harness.charm._get_password(),
-                    }
-                }
+                    },
+                },
             },
         }
         self.assertEqual(found_plan, expected_plan)
@@ -142,7 +142,7 @@ class TestCharm(TestCase):
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
             "--appendonly yes",
-            f"--dir /var/lib/redis/",
+            "--dir /var/lib/redis/",
         ]
         expected_plan = {
             "services": {
@@ -163,8 +163,8 @@ class TestCharm(TestCase):
                     "startup": "enabled",
                     "environment": {
                         "REDIS_PASSWORD": self.harness.charm._get_password(),
-                    }
-                }
+                    },
+                },
             },
         }
         self.assertEqual(found_plan, expected_plan)
@@ -283,8 +283,8 @@ class TestCharm(TestCase):
                     "startup": "enabled",
                     "environment": {
                         "REDIS_PASSWORD": self.harness.charm._get_password(),
-                    }
-                }
+                    },
+                },
             },
         }
         self.assertEqual(found_plan, expected_plan)
@@ -336,7 +336,7 @@ class TestCharm(TestCase):
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
             "--appendonly yes",
-            f"--dir /var/lib/redis/",
+            "--dir /var/lib/redis/",
             "--tls-port 6379",
             "--port 0",
             "--tls-auth-clients optional",
@@ -363,8 +363,8 @@ class TestCharm(TestCase):
                     "startup": "enabled",
                     "environment": {
                         "REDIS_PASSWORD": self.harness.charm._get_password(),
-                    }
-                }
+                    },
+                },
             },
         }
 
@@ -410,7 +410,7 @@ class TestCharm(TestCase):
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
             "--appendonly yes",
-            f"--dir /var/lib/redis/",
+            "--dir /var/lib/redis/",
             f"--replicaof {leader_hostname} {redis_port}",
         ]
         expected_plan = {
@@ -432,8 +432,8 @@ class TestCharm(TestCase):
                     "startup": "enabled",
                     "environment": {
                         "REDIS_PASSWORD": self.harness.charm._get_password(),
-                    }
-                }
+                    },
+                },
             },
         }
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
