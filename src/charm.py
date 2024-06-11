@@ -382,7 +382,7 @@ class RedisK8sCharm(CharmBase):
                     "environment": {
                         "REDIS_PASSWORD": self._get_password(),
                     },
-                }
+                },
             },
         }
         return Layer(layer_config)
