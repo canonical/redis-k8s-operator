@@ -94,6 +94,8 @@ class TestCharm(TestCase):
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            f"--dir /var/lib/redis/",
         ]
         expected_plan = {
             "services": {
@@ -104,6 +106,17 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    }
                 }
             },
         }
@@ -128,6 +141,8 @@ class TestCharm(TestCase):
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            f"--dir /var/lib/redis/",
         ]
         expected_plan = {
             "services": {
@@ -138,6 +153,17 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    }
                 }
             },
         }
@@ -182,7 +208,7 @@ class TestCharm(TestCase):
 
         self.harness.model.unit.get_container = mock_get_container
         self.harness.update_config()
-        mock_container.restart.assert_called_once_with("redis")
+        mock_container.restart.assert_called_once_with("redis", "redis_exporter")
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
@@ -235,6 +261,8 @@ class TestCharm(TestCase):
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--protected-mode no",
             "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            "--dir /var/lib/redis/",
         ]
         expected_plan = {
             "services": {
@@ -245,6 +273,17 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    }
                 }
             },
         }
@@ -296,6 +335,8 @@ class TestCharm(TestCase):
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            f"--dir /var/lib/redis/",
             "--tls-port 6379",
             "--port 0",
             "--tls-auth-clients optional",
@@ -312,6 +353,17 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    }
                 }
             },
         }
@@ -357,6 +409,8 @@ class TestCharm(TestCase):
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            f"--dir /var/lib/redis/",
             f"--replicaof {leader_hostname} {redis_port}",
         ]
         expected_plan = {
@@ -368,6 +422,17 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    }
                 }
             },
         }
