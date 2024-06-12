@@ -5,6 +5,7 @@
 import logging
 
 import pytest
+import requests
 from lightkube import AsyncClient
 from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
@@ -23,6 +24,8 @@ from .helpers import (
     get_unit_map,
     get_unit_number,
 )
+
+METRICS_PORT = 9121
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,22 @@ async def test_application_is_up(ops_test: OpsTest):
     cli = Redis(address, password=password)
 
     assert cli.ping()
+
+
+@pytest.mark.abort_on_fail
+async def test_metrics_exporter_is_up(ops_test: OpsTest):
+    """Check the availability of the metrics endpoint."""
+    unit_map = await get_unit_map(ops_test)
+    leader_num = get_unit_number(unit_map["leader"])
+    unit_address = await get_address(ops_test, unit_num=leader_num)
+    with requests.Session() as http:
+        redis_exporter_url = f"http://{unit_address}:{METRICS_PORT}/metrics"
+        resp = http.get(redis_exporter_url)
+
+    assert resp.status_code == 200
+
+    # if configured correctly there should be more than one metric present
+    assert resp.text.count("redis") > 10
 
 
 async def test_replication(ops_test: OpsTest):
