@@ -30,6 +30,14 @@ maintainers:
 provides:
   redis:
     interface: redis
+  metrics-endpoint:
+    interface: prometheus_scrape
+  grafana-dashboard:
+    interface: grafana_dashboard
+
+requires:
+  logging:
+      interface: loki_push_api
 
 containers:
   redis:
@@ -44,7 +52,7 @@ resources:
   redis-image:
     type: oci-image
     description: ubuntu lts docker image for redis
-    upstream: ghcr.io/canonical/charmed-redis:7.0-22.04_edge
+    upstream: ghcr.io/canonical/charmed-redis:7.2.5-22.04-edge
   cert-file:
     type: file
     filename: redis.crt

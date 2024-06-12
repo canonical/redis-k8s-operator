@@ -86,12 +86,16 @@ class TestCharm(TestCase):
         self.harness.set_leader(True)
         info.return_value = {"redis_version": "6.0.11"}
         self.harness.update_config()
+        self.harness.charm.on.update_status.emit()
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
+            "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            "--dir /var/lib/redis/",
         ]
         expected_plan = {
             "services": {
@@ -102,7 +106,18 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
-                }
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    },
+                },
             },
         }
         self.assertEqual(found_plan, expected_plan)
@@ -118,12 +133,16 @@ class TestCharm(TestCase):
         self.harness.set_leader(True)
         info.side_effect = RedisError("Error connecting to redis")
         self.harness.update_config()
+        self.harness.charm.on.update_status.emit()
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
             f"--requirepass {self.harness.charm._get_password()}",
             "--bind 0.0.0.0",
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
+            "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            "--dir /var/lib/redis/",
         ]
         expected_plan = {
             "services": {
@@ -134,7 +153,18 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
-                }
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    },
+                },
             },
         }
         self.assertEqual(found_plan, expected_plan)
@@ -178,7 +208,7 @@ class TestCharm(TestCase):
 
         self.harness.model.unit.get_container = mock_get_container
         self.harness.update_config()
-        mock_container.restart.assert_called_once_with("redis")
+        mock_container.restart.assert_called_once_with("redis", "redis_exporter")
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
@@ -230,6 +260,9 @@ class TestCharm(TestCase):
             "--bind 0.0.0.0",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--protected-mode no",
+            "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            "--dir /var/lib/redis/",
         ]
         expected_plan = {
             "services": {
@@ -240,7 +273,18 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
-                }
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    },
+                },
             },
         }
         self.assertEqual(found_plan, expected_plan)
@@ -282,6 +326,7 @@ class TestCharm(TestCase):
         _store_certificates.assert_called()
 
         self.harness.update_config({"enable-tls": True})
+        self.harness.charm.on.update_status.emit()
 
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
@@ -289,6 +334,9 @@ class TestCharm(TestCase):
             "--bind 0.0.0.0",
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
+            "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            "--dir /var/lib/redis/",
             "--tls-port 6379",
             "--port 0",
             "--tls-auth-clients optional",
@@ -305,7 +353,18 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
-                }
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    },
+                },
             },
         }
 
@@ -349,6 +408,9 @@ class TestCharm(TestCase):
             "--bind 0.0.0.0",
             f"--masterauth {self.harness.charm._get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
+            "--logfile /var/log/redis/redis-server.log",
+            "--appendonly yes",
+            "--dir /var/lib/redis/",
             f"--replicaof {leader_hostname} {redis_port}",
         ]
         expected_plan = {
@@ -360,7 +422,18 @@ class TestCharm(TestCase):
                     "user": "redis",
                     "group": "redis",
                     "startup": "enabled",
-                }
+                },
+                "redis_exporter": {
+                    "override": "replace",
+                    "summary": "Redis metric exporter",
+                    "command": "bin/redis_exporter",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                    "environment": {
+                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                    },
+                },
             },
         }
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
