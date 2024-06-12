@@ -38,7 +38,7 @@ To discover the IP Redis is running behind. The output will have lines like:
 
 To retrieve the password to access the database, use the `get-initial-admin-password` action:
 
-    juju run redis-k8s/0 get-initial-admin-password --wait
+    juju run-action redis-k8s/0 get-initial-admin-password --wait
 
 Then, from your local machine, you can:
 
@@ -54,7 +54,7 @@ runs on its default port, 26379.
 A different password is used to setup sentinel. To retrieve it, use
 `get-sentinel-password` action:
 
-    juju run redis-k8s/0 get-sentinel-password --wait
+    juju run-action redis-k8s/0 get-sentinel-password --wait
 
 From a local machine, you can:
 
