@@ -13,7 +13,12 @@ LEADER_HOST_KEY = "leader-host"
 SOCKET_TIMEOUT = 1
 
 REDIS_PORT = 6379
+REDIS_USER = "redis"
 SENTINEL_PORT = 26379
+METRICS_PORT = 9121
 
+LOG_DIR = "/var/log/redis"
+LOG_FILE = f"{LOG_DIR}/redis-server.log"
 CONFIG_DIR = "/etc/redis-server"
+WORKING_DIR = "/var/lib/redis/"
 SENTINEL_CONFIG_PATH = f"{CONFIG_DIR}/sentinel.conf"
