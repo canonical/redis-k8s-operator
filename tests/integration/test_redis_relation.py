@@ -155,6 +155,9 @@ async def test_delete_redis_pod(ops_test: OpsTest):
     assert response.status == 200
 
 
+@pytest.mark.skip(
+    reason="This charm is no longer maintained, see https://chat.canonical.com/canonical/pl/awnyrhtc5fb4pxpqjsyxc59xae"
+)
 async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
     """Test the second Discourse charm."""
     unit_map = await get_unit_map(ops_test)
