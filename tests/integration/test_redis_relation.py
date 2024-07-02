@@ -16,10 +16,12 @@ from .helpers import (
     check_application_status,
     get_address,
     get_unit_map,
+    get_unit_number,
     query_url,
 )
 
-DISCOURSE_APP_NAME = "discourse-k8s"
+FIRST_DISCOURSE_APP_NAME = "discourse-k8s"
+SECOND_DISCOURSE_APP_NAME = "discourse-charmers-discourse-k8s"
 POSTGRESQL_APP_NAME = "postgresql-k8s"
 
 logger = logging.getLogger(__name__)
@@ -57,10 +59,7 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
                 series="focal",
             ),
             ops_test.model.deploy(
-                DISCOURSE_APP_NAME,
-                application_name=DISCOURSE_APP_NAME,
-                series="focal",
-                channel="latest/stable",
+                FIRST_DISCOURSE_APP_NAME, application_name=FIRST_DISCOURSE_APP_NAME, series="focal"
             ),
             ops_test.model.deploy(
                 POSTGRESQL_APP_NAME,
@@ -75,10 +74,12 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
         )
         # Discourse becomes blocked waiting for relations.
         await ops_test.model.wait_for_idle(
-            apps=[DISCOURSE_APP_NAME], status="waiting", idle_period=20, timeout=3000
+            apps=[FIRST_DISCOURSE_APP_NAME], status="waiting", idle_period=20, timeout=3000
         )
 
-    assert ops_test.model.applications[DISCOURSE_APP_NAME].units[0].workload_status == "waiting"
+    assert (
+        ops_test.model.applications[FIRST_DISCOURSE_APP_NAME].units[0].workload_status == "waiting"
+    )
     assert ops_test.model.applications[POSTGRESQL_APP_NAME].units[0].workload_status == "active"
 
 
@@ -87,14 +88,14 @@ async def test_discourse_relation(ops_test: OpsTest):
     # Test the first Discourse charm.
     # Add both relations to Discourse (PostgreSQL and Redis)
     # and wait for it to be ready.
-    await ops_test.model.relate(f"{POSTGRESQL_APP_NAME}:database", DISCOURSE_APP_NAME)
+    await ops_test.model.relate(f"{POSTGRESQL_APP_NAME}:database", FIRST_DISCOURSE_APP_NAME)
     # Wait until discourse handles all relation events related to postgresql
-    await ops_test.model.relate(APP_NAME, DISCOURSE_APP_NAME)
+    await ops_test.model.relate(APP_NAME, FIRST_DISCOURSE_APP_NAME)
 
     # This won't work: model.applications[app_name].units[0].workload_status returns wrong status
     """
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME, DISCOURSE_APP_NAME, POSTGRESQL_APP_NAME],
+        apps=[APP_NAME, FIRST_DISCOURSE_APP_NAME, POSTGRESQL_APP_NAME],
         status="active",
         idle_period=30,
         timeout=3000,  # Discourse takes a longer time to become active (a lot of setup).
@@ -102,7 +103,7 @@ async def test_discourse_relation(ops_test: OpsTest):
     """
 
     await ops_test.model.block_until(
-        lambda: check_application_status(ops_test, DISCOURSE_APP_NAME) == "active",
+        lambda: check_application_status(ops_test, FIRST_DISCOURSE_APP_NAME) == "active",
         timeout=900,
         wait_period=5,
     )
@@ -115,7 +116,7 @@ async def test_discourse_relation(ops_test: OpsTest):
 
 async def test_discourse_request(ops_test: OpsTest):
     """Try to connect to discourse after the bundle is deployed."""
-    discourse_ip = await get_address(ops_test, app_name=DISCOURSE_APP_NAME)
+    discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME)
     url = f"http://{discourse_ip}:3000/site.json"
     response = query_url(url)
 
@@ -140,15 +141,52 @@ async def test_delete_redis_pod(ops_test: OpsTest):
         apps=[APP_NAME], status="active", timeout=1000, idle_period=60
     )
     await ops_test.model.block_until(
-        lambda: check_application_status(ops_test, DISCOURSE_APP_NAME) == "active",
+        lambda: check_application_status(ops_test, FIRST_DISCOURSE_APP_NAME) == "active",
         timeout=1200,
         wait_period=5,
     )
 
     redis_ip_after = await get_address(ops_test, app_name=APP_NAME, unit_num=leader_unit_num)
-    discourse_ip = await get_address(ops_test, app_name=DISCOURSE_APP_NAME)
+    discourse_ip = await get_address(ops_test, app_name=FIRST_DISCOURSE_APP_NAME)
     url = f"http://{discourse_ip}:3000/site.json"
     response = query_url(url)
 
     assert redis_ip_before != redis_ip_after
     assert response.status == 200
+
+
+async def test_discourse_from_discourse_charmers(ops_test: OpsTest):
+    """Test the second Discourse charm."""
+    unit_map = await get_unit_map(ops_test)
+
+    # Get the Redis instance IP address.
+    redis_host = await get_address(ops_test, unit_num=get_unit_number(unit_map["leader"]))
+
+    # Deploy Discourse and wait for it to be blocked waiting for database relation.
+    await ops_test.model.deploy(
+        SECOND_DISCOURSE_APP_NAME,
+        application_name=SECOND_DISCOURSE_APP_NAME,
+        config={
+            "redis_host": redis_host,
+            "developer_emails": "user@foo.internal",
+            "external_hostname": "foo.internal",
+            "smtp_address": "127.0.0.1",
+            "smtp_domain": "foo.internal",
+        },
+        series="focal",
+    )
+    # Discourse becomes blocked waiting for PostgreSQL relation.
+    await ops_test.model.wait_for_idle(
+        apps=[SECOND_DISCOURSE_APP_NAME], status="blocked", timeout=3000
+    )
+
+    # Relate PostgreSQL and Discourse, waiting for Discourse to be ready.
+    await ops_test.model.add_relation(
+        f"{POSTGRESQL_APP_NAME}:db-admin",
+        SECOND_DISCOURSE_APP_NAME,
+    )
+    await ops_test.model.wait_for_idle(
+        apps=[POSTGRESQL_APP_NAME, SECOND_DISCOURSE_APP_NAME, APP_NAME],
+        status="active",
+        timeout=3000,  # Discourse takes a longer time to become active (a lot of setup).
+    )
