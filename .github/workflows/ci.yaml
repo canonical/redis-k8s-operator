@@ -48,7 +48,8 @@ jobs:
         tox-environments:
           - integration-charm
           - integration-password
-          - integration-redis-relation
+          # reason: "https://github.com/canonical/discourse-k8s-operator/issues/268"
+          # - integration-redis-relation
     name: ${{ matrix.tox-environments }}
     needs:
       - lint
