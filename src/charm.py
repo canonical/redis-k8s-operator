@@ -102,7 +102,6 @@ class RedisK8sCharm(CharmBase):
 
         Updates the Pebble layer if needed.
         """
-        self._initialize_directory_structure()
         self._store_certificates()
         self._update_layer()
 
@@ -329,6 +328,8 @@ class RedisK8sCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
             return
 
+        self._initialize_directory_structure()
+
         if not self._valid_app_databag():
             self.unit.status = WaitingStatus("Waiting for peer data to be updated")
             return
@@ -351,10 +352,6 @@ class RedisK8sCharm(CharmBase):
     def _initialize_directory_structure(self) -> None:
         """Make sure all required directories for redis are available on startup."""
         container = self.unit.get_container("redis")
-
-        if not container.can_connect():
-            self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
-            return
 
         if not container.exists(LOG_DIR):
             container.make_dir(
