@@ -20,7 +20,7 @@ from ops.charm import ActionEvent, CharmBase, UpgradeCharmEvent
 from ops.framework import EventBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
-from ops.pebble import Layer, ExecError
+from ops.pebble import ExecError, Layer
 from redis import ConnectionError, Redis, TimeoutError
 from redis.exceptions import RedisError
 from tenacity import before_log, retry, stop_after_attempt, wait_fixed
@@ -349,7 +349,7 @@ class RedisK8sCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _initialize_directory_structure(self) -> None:
-        """Make sure all required directories for redis are available on startup"""
+        """Make sure all required directories for redis are available on startup."""
         container = self.unit.get_container("redis")
 
         if not container.can_connect():
@@ -375,9 +375,7 @@ class RedisK8sCharm(CharmBase):
             )
         else:
             try:
-                container.exec(
-                    ["chown", "-R", f"{REDIS_USER}:{REDIS_USER}", WORKING_DIR]
-                )
+                container.exec(["chown", "-R", f"{REDIS_USER}:{REDIS_USER}", WORKING_DIR])
             except ExecError as e:
                 logger.error(f"Exited with error {e}")
 
