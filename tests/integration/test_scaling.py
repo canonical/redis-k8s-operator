@@ -51,7 +51,7 @@ async def test_build_and_deploy(ops_test: OpsTest):
     assert ops_test.model.applications[APP_NAME].units[0].workload_status == "active"
 
 
-@pytest.mark.run(before="test_scale_down_departing_master")
+@pytest.mark.abort_on_fail
 async def test_scale_up_replication_after_failover(ops_test: OpsTest):
     """Trigger a failover and scale up the application, then test replication status."""
     unit_map = await get_unit_map(ops_test)
@@ -112,7 +112,7 @@ async def test_scale_up_replication_after_failover(ops_test: OpsTest):
         client.close()
 
 
-@pytest.mark.run(after="test_scale_up_replication_after_failover")
+@pytest.mark.abort_on_fail
 async def test_scale_down_departing_master(ops_test: OpsTest):
     """Failover to the last unit and scale down."""
     unit_map = await get_unit_map(ops_test)
