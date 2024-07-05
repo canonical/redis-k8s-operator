@@ -246,7 +246,8 @@ class TestCharm(TestCase):
         self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
         self.assertEqual(rel_data.get("port"), "6379")
 
-    def test_pebble_layer_on_relation_created(self):
+    @mock.patch("charm.RedisK8sCharm._initialize_directory_structure")
+    def test_pebble_layer_on_relation_created(self, initialize_directory_structure):
         self.harness.set_leader(True)
 
         # Create a relation using 'redis' interface
