@@ -337,6 +337,15 @@ class RedisK8sCharm(CharmBase):
                 group=REDIS_USER,
             )
 
+        if not container.exists(WORKING_DIR):
+            container.make_dir(
+                WORKING_DIR,
+                make_parents=True,
+                permissions=0o770,
+                user=REDIS_USER,
+                group=REDIS_USER,
+            )
+
         if not self._valid_app_databag():
             self.unit.status = WaitingStatus("Waiting for peer data to be updated")
             return
