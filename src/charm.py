@@ -20,7 +20,7 @@ from ops.charm import ActionEvent, CharmBase, UpgradeCharmEvent
 from ops.framework import EventBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError, Relation, WaitingStatus
-from ops.pebble import Layer
+from ops.pebble import Layer, ExecError
 from redis import ConnectionError, Redis, TimeoutError
 from redis.exceptions import RedisError
 from tenacity import before_log, retry, stop_after_attempt, wait_fixed
@@ -102,6 +102,7 @@ class RedisK8sCharm(CharmBase):
 
         Updates the Pebble layer if needed.
         """
+        self._initialize_directory_structure()
         self._store_certificates()
         self._update_layer()
 
@@ -328,24 +329,6 @@ class RedisK8sCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
             return
 
-        if not container.exists(LOG_DIR):
-            container.make_dir(
-                LOG_DIR,
-                make_parents=True,
-                permissions=0o770,
-                user=REDIS_USER,
-                group=REDIS_USER,
-            )
-
-        if not container.exists(WORKING_DIR):
-            container.make_dir(
-                WORKING_DIR,
-                make_parents=True,
-                permissions=0o770,
-                user=REDIS_USER,
-                group=REDIS_USER,
-            )
-
         if not self._valid_app_databag():
             self.unit.status = WaitingStatus("Waiting for peer data to be updated")
             return
@@ -364,6 +347,39 @@ class RedisK8sCharm(CharmBase):
             logger.info("Restarted redis and redis_exporter services")
 
         self.unit.status = ActiveStatus()
+
+    def _initialize_directory_structure(self) -> None:
+        """Make sure all required directories for redis are available on startup"""
+        container = self.unit.get_container("redis")
+
+        if not container.can_connect():
+            self.unit.status = WaitingStatus("Waiting for Pebble in workload container")
+            return
+
+        if not container.exists(LOG_DIR):
+            container.make_dir(
+                LOG_DIR,
+                make_parents=True,
+                permissions=0o770,
+                user=REDIS_USER,
+                group=REDIS_USER,
+            )
+
+        if not container.exists(WORKING_DIR):
+            container.make_dir(
+                WORKING_DIR,
+                make_parents=True,
+                permissions=0o770,
+                user=REDIS_USER,
+                group=REDIS_USER,
+            )
+        else:
+            try:
+                container.exec(
+                    ["chown", "-R", f"{REDIS_USER}:{REDIS_USER}", WORKING_DIR]
+                )
+            except ExecError as e:
+                logger.error(f"Exited with error {e}")
 
     def _redis_layer(self) -> Layer:
         """Create the Pebble configuration layer for Redis.
