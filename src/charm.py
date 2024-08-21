@@ -309,6 +309,12 @@ class RedisK8sCharm(CharmBase):
             return
 
         self._peers.data[self.app]["enable-password"] = "false"
+
+        logger.info(f"relation data: {event.relation.data}")
+        info = self.sentinel.get_master_info()
+        event.relation.data[self.app][LEADER_HOST_KEY] = info["ip"]
+        logger.info(f"relation data: {event.relation.data}")
+
         self._update_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
@@ -671,9 +677,8 @@ class RedisK8sCharm(CharmBase):
         logger.info(f"Unit {self.unit.name} updating master info to {info['ip']}")
         self._peers.data[self.app][LEADER_HOST_KEY] = info["ip"]
 
-        if relations := self.model.relations[REDIS_REL_NAME]:
-            for relation in relations:
-                relation.data[self.app][LEADER_HOST_KEY] = info["ip"]
+        for relation in self.model.relations.get(REDIS_REL_NAME):
+            relation.data[self.app][LEADER_HOST_KEY] = info["ip"]
 
     def _sentinel_failover(self, departing_unit_name: str) -> None:
         """Try to failover the current master.
