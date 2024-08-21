@@ -310,10 +310,10 @@ class RedisK8sCharm(CharmBase):
 
         self._peers.data[self.app]["enable-password"] = "false"
 
-        logger.info(f"relation data: {event.relation.data}")
+        logger.info(f"relation data before: {event.relation.data}")
         info = self.sentinel.get_master_info()
         event.relation.data[self.app][LEADER_HOST_KEY] = info["ip"]
-        logger.info(f"relation data: {event.relation.data}")
+        logger.info(f"relation data after: {event.relation.data}")
 
         self._update_layer()
 
