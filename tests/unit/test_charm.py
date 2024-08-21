@@ -241,10 +241,12 @@ class TestCharm(TestCase):
         self.harness.add_relation_unit(rel_id, "wordpress/0")
         # When
         self.harness._emit_relation_changed(rel_id, "wordpress/0")
-        rel_data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+        rel_data_unit = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+        rel_data_app = self.harness.get_relation_data(rel_id, self.harness.charm.app.name)
         # Then
-        self.assertEqual(rel_data.get("hostname"), "10.2.1.5")
-        self.assertEqual(rel_data.get("port"), "6379")
+        self.assertEqual(rel_data_unit.get("hostname"), "10.2.1.5")
+        self.assertEqual(rel_data_unit.get("port"), "6379")
+        self.assertEqual(rel_data_app.get("leader-host"), self.harness.charm.unit_pod_hostname)
 
     @mock.patch("charm.RedisK8sCharm._initialize_directory_structure")
     def test_pebble_layer_on_relation_created(self, initialize_directory_structure):
