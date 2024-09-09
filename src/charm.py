@@ -309,7 +309,8 @@ class RedisK8sCharm(CharmBase):
             return
 
         self._peers.data[self.app]["enable-password"] = "false"
-        event.relation.data[self.app][LEADER_HOST_KEY] = self.current_master
+        if self.current_master:
+            event.relation.data[self.app][LEADER_HOST_KEY] = self.current_master
 
         self._update_layer()
 
