@@ -39,7 +39,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version.
-LIBPATCH = 6
+LIBPATCH = 7
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +102,12 @@ class RedisRequires(Object):
         if not relation_data:
             return None
         redis_host = relation_data.get("hostname")
+        relation = self.model.get_relation(self.relation_name)
+        relation_app_data = relation.data.get(relation.app)
+        try:
+            redis_host = relation_app_data.get("leader-host", redis_host)
+        except KeyError:
+            pass
         redis_port = relation_data.get("port")
         return f"redis://{redis_host}:{redis_port}"
 
