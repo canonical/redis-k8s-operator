@@ -79,6 +79,16 @@ class RedisRequires(Object):
         self.charm.on.redis_relation_updated.emit()
 
     @property
+    def app_data(self) -> Optional[Dict[str, str]]:
+        """Retrieve the app data.
+
+        Returns:
+            Dict: dict containing the app data.
+        """
+        relation = self.model.get_relation(self.relation_name)
+        return relation.data.get(relation.app)
+
+    @property
     def relation_data(self) -> Optional[Dict[str, str]]:
         """Retrieve the relation data.
 
@@ -102,10 +112,8 @@ class RedisRequires(Object):
         if not relation_data:
             return None
         redis_host = relation_data.get("hostname")
-        relation = self.model.get_relation(self.relation_name)
-        relation_app_data = relation.data.get(relation.app)
         try:
-            redis_host = relation_app_data.get("leader-host", redis_host)
+            redis_host = self.app_data.get("leader-host", redis_host)
         except KeyError:
             pass
         redis_port = relation_data.get("port")
