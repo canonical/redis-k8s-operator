@@ -134,7 +134,7 @@ class Sentinel(Object):
             container.make_dir(
                 CONFIG_DIR,
                 make_parents=True,
-                permissions=0o770,
+                permissions=0o750,
                 user="redis",
                 group="redis",
             )
