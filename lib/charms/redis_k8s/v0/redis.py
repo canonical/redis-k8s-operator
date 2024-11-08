@@ -86,7 +86,9 @@ class RedisRequires(Object):
             Dict: dict containing the app data.
         """
         relation = self.model.get_relation(self.relation_name)
-        return relation.data.get(relation.app)
+        if not relation:
+            return None
+        return relation.data[relation.app]
 
     @property
     def relation_data(self) -> Optional[Dict[str, str]]:
@@ -109,13 +111,16 @@ class RedisRequires(Object):
             str: the Redis URL.
         """
         relation_data = self.relation_data
+        app_data = self.app_data
         if not relation_data:
             return None
         redis_host = relation_data.get("hostname")
-        try:
-            redis_host = self.app_data.get("leader-host", redis_host)
-        except KeyError:
-            pass
+
+        if app_data:
+            try:
+                redis_host = self.app_data.get("leader-host", redis_host)
+            except KeyError:
+                pass
         redis_port = relation_data.get("port")
         return f"redis://{redis_host}:{redis_port}"
 
