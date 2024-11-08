@@ -110,13 +110,12 @@ class RedisRequires(Object):
         Returns:
             str: the Redis URL.
         """
-        relation_data = self.relation_data
-        app_data = self.app_data
-        if not relation_data:
+        if not (relation_data := self.relation_data):
             return None
+            
         redis_host = relation_data.get("hostname")
 
-        if app_data:
+        if app_data := self.app_data:
             try:
                 redis_host = self.app_data.get("leader-host", redis_host)
             except KeyError:
