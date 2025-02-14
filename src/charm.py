@@ -578,8 +578,11 @@ class RedisK8sCharm(CharmBase):
         Returns:
             String with the password
         """
-        data = self._peers.data[self.app]
-        return data.get(SENTINEL_PASSWORD_KEY)
+        try:
+            data = self._peers.data[self.app]
+            return data.get(SENTINEL_PASSWORD_KEY)
+        except AttributeError as e:
+            logger.error(f"Error getting peer databag: {e}")
 
     def _store_certificates(self) -> None:
         """Copy the TLS certificates to the redis container."""
