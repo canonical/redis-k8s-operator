@@ -39,7 +39,7 @@ jobs:
 
   build:
     name: Build charms
-    uses: canonical/data-platform-workflows/.github/workflows/build_charms_with_cache.yaml@v7
+    uses: canonical/data-platform-workflows/.github/workflows/build_charm.yaml@v29.0.0
 
   integration-test:
     strategy:
@@ -48,9 +48,7 @@ jobs:
         tox-environments:
           - integration-charm
           - integration-password
-          # Skipping until issues in `discourse-k8s-operator` are resolved. Issue:
-          # "https://github.com/canonical/discourse-k8s-operator/issues/268"
-          # - integration-redis-relation
+          - integration-redis-relation
     name: ${{ matrix.tox-environments }}
     needs:
       - lint
@@ -70,7 +68,7 @@ jobs:
           juju-channel: 2.9/stable
           bootstrap-options: "--agent-version 2.9.49"
       - name: Download packed charm(s)
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact-name }}
       - name: Select tests
@@ -109,7 +107,7 @@ jobs:
           juju-channel: 2.9/stable
           bootstrap-options: "--agent-version 2.9.49"
       - name: Download packed charm(s)
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact-name }}
       - name: Select tests
@@ -148,7 +146,7 @@ jobs:
           juju-channel: 2.9/stable
           bootstrap-options: "--agent-version 2.9.29"
       - name: Download packed charm(s)
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact-name }}
       - name: Select tests
