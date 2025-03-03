@@ -30,6 +30,7 @@ provides:
 requires:
   logging:
       interface: loki_push_api
+      optional: true
 
 containers:
   redis:
@@ -63,3 +64,4 @@ storage:
 peers:
   redis-peers:
     interface: redis-peers
+    optional: true
