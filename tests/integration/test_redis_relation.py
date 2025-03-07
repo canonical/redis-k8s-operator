@@ -68,6 +68,7 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
                 channel="14/stable",
                 series="jammy",
                 trust=True,
+                config={"profile": "testing"},
             ),
         )
         await ops_test.model.wait_for_idle(
