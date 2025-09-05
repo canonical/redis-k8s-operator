@@ -40,7 +40,11 @@ async def test_build_and_deploy(ops_test: OpsTest):
         "ca-cert-file": METADATA["resources"]["ca-cert-file"]["filename"],
     }
     await ops_test.model.deploy(
-        charm, resources=resources, application_name=APP_NAME, num_units=NUM_UNITS
+        charm,
+        resources=resources,
+        application_name=APP_NAME,
+        num_units=NUM_UNITS,
+        series="jammy",
     )
     await ops_test.model.wait_for_idle(
         apps=[APP_NAME],

@@ -54,7 +54,7 @@ async def test_build_and_deploy(ops_test: OpsTest, num_units: int):
                 application_name=APP_NAME,
                 trust=True,
                 num_units=num_units,
-                series="focal",
+                series="jammy",
             ),
             ops_test.model.deploy(
                 DISCOURSE_APP_NAME,
