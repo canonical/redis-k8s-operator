@@ -56,7 +56,7 @@ class RedisK8sCharm(CharmBase):
         super().__init__(*args)
 
         self._unit_name = self.unit.name
-        self._name = self.model.app.name
+        self.name = self.model.app.name
         self._namespace = self.model.name
         self.redis_provides = RedisProvides(self, port=REDIS_PORT)
         self.sentinel = Sentinel(self)
@@ -95,7 +95,7 @@ class RedisK8sCharm(CharmBase):
             self.on.get_sentinel_password_action, self._get_sentinel_password_action
         )
 
-        self._storage_path = self.meta.storages["database"].location
+        self.storage_path = self.meta.storages["database"].location
 
     def _redis_pebble_ready(self, event) -> None:
         """Handle the pebble_ready event.
@@ -125,6 +125,7 @@ class RedisK8sCharm(CharmBase):
         will trigger this event.
         """
         self._store_certificates()
+        self.sentinel.store_certificates()
 
         # NOTE: This is the case of a single unit deployment. If that's the case, the charm
         # doesn't need to check for failovers or figure out who the master is.
@@ -169,7 +170,7 @@ class RedisK8sCharm(CharmBase):
 
         Additionally, there is a check for departing juju leader on scale-down operations.
         """
-        if not self._get_password():
+        if not self.get_password():
             logger.info("Creating password for application")
             self._peers.data[self.app][PEER_PASSWORD_KEY] = self._generate_password()
 
@@ -203,13 +204,13 @@ class RedisK8sCharm(CharmBase):
         updating the unit status with the result.
         """
         # Check that certificates exist if TLS is enabled
-        if self.config["enable-tls"] and None in self._certificates:
+        if self.config["enable-tls"] and None in self.certificates:
             logger.warning("Not enough certificates found for TLS")
             self.unit.status = BlockedStatus("Not enough certificates found")
             return
 
         self._update_layer()
-        self.sentinel._update_sentinel_layer()
+        self.sentinel.update_sentinel_layer()
 
         # update_layer will set a Waiting status if Pebble is not ready
         if not isinstance(self.unit.status, ActiveStatus):
@@ -333,7 +334,7 @@ class RedisK8sCharm(CharmBase):
 
         self._initialize_directory_structure()
 
-        if not self._valid_app_databag():
+        if not self.valid_app_databag():
             self.unit.status = WaitingStatus("Waiting for peer data to be updated")
             return
 
@@ -405,7 +406,7 @@ class RedisK8sCharm(CharmBase):
                     "group": REDIS_USER,
                     "startup": "enabled",
                     "environment": {
-                        "REDIS_PASSWORD": self._get_password(),
+                        "REDIS_PASSWORD": self.get_password(),
                     },
                 },
             },
@@ -419,9 +420,9 @@ class RedisK8sCharm(CharmBase):
         redis-server service.
         """
         extra_flags = [
-            f"--requirepass {self._get_password()}",
+            f"--requirepass {self.get_password()}",
             "--bind 0.0.0.0",
-            f"--masterauth {self._get_password()}",
+            f"--masterauth {self.get_password()}",
             f"--replica-announce-ip {self.unit_pod_hostname}",
             f"--logfile {LOG_FILE}",
             "--appendonly yes",
@@ -446,9 +447,9 @@ class RedisK8sCharm(CharmBase):
                 f"--tls-port {REDIS_PORT}",
                 "--port 0",
                 "--tls-auth-clients optional",
-                f"--tls-cert-file {self._storage_path}/redis.crt",
-                f"--tls-key-file {self._storage_path}/redis.key",
-                f"--tls-ca-cert-file {self._storage_path}/ca.crt",
+                f"--tls-cert-file {self.storage_path}/redis.crt",
+                f"--tls-key-file {self.storage_path}/redis.key",
+                f"--tls-ca-cert-file {self.storage_path}/ca.crt",
             ]
 
         # Check that current unit is master
@@ -496,7 +497,7 @@ class RedisK8sCharm(CharmBase):
 
         Sets the result of the action with the admin password for Redis.
         """
-        event.set_results({"redis-password": self._get_password()})
+        event.set_results({"redis-password": self.get_password()})
 
     def _get_sentinel_password_action(self, event: ActionEvent) -> None:
         """Handle the get_sentinel_password event.
@@ -515,14 +516,14 @@ class RedisK8sCharm(CharmBase):
         return self.model.get_relation(PEER)
 
     @property
-    def _certificates(self) -> List[Optional[Path]]:
+    def certificates(self) -> List[Optional[Path]]:
         """Paths of the certificate files.
 
         Returns:
             A list with the paths of the certificates or None where no path can be found
         """
         resources = ["cert-file", "key-file", "ca-cert-file"]
-        return [self._retrieve_resource(res) for res in resources]
+        return [self.retrieve_resource(res) for res in resources]
 
     @property
     def unit_pod_hostname(self, name="") -> str:
@@ -534,13 +535,13 @@ class RedisK8sCharm(CharmBase):
         """Get the current master."""
         return self._peers.data[self.app].get(LEADER_HOST_KEY)
 
-    def _valid_app_databag(self) -> bool:
+    def valid_app_databag(self) -> bool:
         """Check if the peer databag has been populated.
 
         Returns:
             bool: True if the databag has been populated, false otherwise
         """
-        password = self._get_password()
+        password = self.get_password()
 
         # NOTE: (DEPRECATE) Only used for the redis legacy relation. The password
         # is not relevant when that relation is used
@@ -559,7 +560,7 @@ class RedisK8sCharm(CharmBase):
         password = "".join([secrets.choice(choices) for i in range(16)])
         return password
 
-    def _get_password(self) -> Optional[str]:
+    def get_password(self) -> Optional[str]:
         """Get the current admin password for Redis.
 
         Returns:
@@ -587,7 +588,7 @@ class RedisK8sCharm(CharmBase):
     def _store_certificates(self) -> None:
         """Copy the TLS certificates to the redis container."""
         # Get a list of valid paths
-        cert_paths = list(filter(None, self._certificates))
+        cert_paths = list(filter(None, self.certificates))
         container = self.unit.get_container("redis")
 
         # Copy the files from the resources location to the redis container.
@@ -595,7 +596,7 @@ class RedisK8sCharm(CharmBase):
         for cert_path in cert_paths:
             with open(cert_path, "r") as f:
                 container.push(
-                    (f"{self._storage_path}/{cert_path.name}"),
+                    (f"{self.storage_path}/{cert_path.name}"),
                     f,
                     make_dirs=True,
                     permissions=0o600,
@@ -603,7 +604,7 @@ class RedisK8sCharm(CharmBase):
                     group="redis",
                 )
 
-    def _retrieve_resource(self, resource: str) -> Optional[Path]:
+    def retrieve_resource(self, resource: str) -> Optional[Path]:
         """Check that the resource exists and return it.
 
         Returns:
@@ -626,7 +627,7 @@ class RedisK8sCharm(CharmBase):
             A string representing the hostname of the Redis unit.
         """
         unit_id = name.split("/")[1]
-        return f"{self._name}-{unit_id}.{self._name}-endpoints.{self._namespace}.svc.cluster.local"
+        return f"{self.name}-{unit_id}.{self.name}-endpoints.{self._namespace}.svc.cluster.local"
 
     @contextmanager
     def _redis_client(self, hostname="localhost") -> Redis:
@@ -637,11 +638,11 @@ class RedisK8sCharm(CharmBase):
         Returns:
             Redis: redis client
         """
-        ca_cert_path = self._retrieve_resource("ca-cert-file")
+        ca_cert_path = self.retrieve_resource("ca-cert-file")
         client = Redis(
             host=hostname,
             port=REDIS_PORT,
-            password=self._get_password(),
+            password=self.get_password(),
             ssl=self.config["enable-tls"],
             ssl_ca_certs=ca_cert_path,
             decode_responses=True,
@@ -691,7 +692,7 @@ class RedisK8sCharm(CharmBase):
             return
 
         with self.sentinel.sentinel_client() as sentinel:
-            sentinel.execute_command(f"SENTINEL FAILOVER {self._name}")
+            sentinel.execute_command(f"SENTINEL FAILOVER {self.name}")
 
     @retry(
         stop=stop_after_attempt(4),
@@ -723,12 +724,12 @@ class RedisK8sCharm(CharmBase):
 
     def _update_quorum(self) -> None:
         """Connect to all Sentinels deployed to update the quorum."""
-        command = f"SENTINEL SET {self._name} quorum {self.sentinel.expected_quorum}"
+        command = f"SENTINEL SET {self.name} quorum {self.sentinel.expected_quorum}"
         self._broadcast_sentinel_command(command)
 
     def _reset_sentinel(self):
         """Reset sentinel to process changes and remove unreachable servers/sentinels."""
-        command = f"SENTINEL RESET {self._name}"
+        command = f"SENTINEL RESET {self.name}"
         self._broadcast_sentinel_command(command)
 
     def _broadcast_sentinel_command(self, command: str) -> None:

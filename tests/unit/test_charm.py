@@ -19,6 +19,7 @@ from redis import Redis
 from redis.exceptions import RedisError
 
 from charm import RedisK8sCharm
+from literals import SENTINEL_CONFIG_PATH, SENTINEL_PORT, WORKING_DIR
 
 APPLICATION_DATA = {
     "leader-host": "leader-host",
@@ -89,9 +90,9 @@ class TestCharm(TestCase):
         self.harness.charm.on.update_status.emit()
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
-            f"--requirepass {self.harness.charm._get_password()}",
+            f"--requirepass {self.harness.charm.get_password()}",
             "--bind 0.0.0.0",
-            f"--masterauth {self.harness.charm._get_password()}",
+            f"--masterauth {self.harness.charm.get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
             "--appendonly yes",
@@ -115,7 +116,7 @@ class TestCharm(TestCase):
                     "group": "redis",
                     "startup": "enabled",
                     "environment": {
-                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_PASSWORD": self.harness.charm.get_password(),
                     },
                 },
             },
@@ -136,9 +137,9 @@ class TestCharm(TestCase):
         self.harness.charm.on.update_status.emit()
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
-            f"--requirepass {self.harness.charm._get_password()}",
+            f"--requirepass {self.harness.charm.get_password()}",
             "--bind 0.0.0.0",
-            f"--masterauth {self.harness.charm._get_password()}",
+            f"--masterauth {self.harness.charm.get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
             "--appendonly yes",
@@ -162,7 +163,7 @@ class TestCharm(TestCase):
                     "group": "redis",
                     "startup": "enabled",
                     "environment": {
-                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_PASSWORD": self.harness.charm.get_password(),
                     },
                 },
             },
@@ -216,18 +217,18 @@ class TestCharm(TestCase):
     @mock.patch.object(RedisK8sCharm, "_is_failover_finished")
     def test_password_on_leader_elected(self, _):
         # Assert that there is no password in the peer relation.
-        self.assertFalse(self.harness.charm._get_password())
+        self.assertFalse(self.harness.charm.get_password())
 
         # Check that a new password was generated on leader election.
         self.harness.set_leader()
-        admin_password = self.harness.charm._get_password()
+        admin_password = self.harness.charm.get_password()
         self.assertTrue(admin_password)
 
         # Trigger a new leader election and check that the password is still the same.
         self.harness.set_leader(False)
         self.harness.set_leader()
         self.assertEqual(
-            self.harness.charm._get_password(),
+            self.harness.charm.get_password(),
             admin_password,
         )
 
@@ -285,7 +286,7 @@ class TestCharm(TestCase):
                     "group": "redis",
                     "startup": "enabled",
                     "environment": {
-                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_PASSWORD": self.harness.charm.get_password(),
                     },
                 },
             },
@@ -295,14 +296,14 @@ class TestCharm(TestCase):
     @mock.patch("charm.RedisK8sCharm._store_certificates")
     def test_attach_resource(self, _store_certificates):
         # Check that there are no resources initially
-        self.assertEqual(self.harness.charm._certificates, [None, None, None])
+        self.assertEqual(self.harness.charm.certificates, [None, None, None])
 
         self.harness.add_resource("cert-file", "")
         self.harness.add_resource("key-file", "")
         self.harness.add_resource("ca-cert-file", "")
 
         # After adding them, check that the property returns paths for the three of them
-        self.assertTrue(None not in self.harness.charm._certificates)
+        self.assertTrue(None not in self.harness.charm.certificates)
 
         self.harness.set_leader(True)
         self.harness.charm.on.upgrade_charm.emit()
@@ -333,9 +334,9 @@ class TestCharm(TestCase):
 
         found_plan = self.harness.get_container_pebble_plan("redis").to_dict()
         extra_flags = [
-            f"--requirepass {self.harness.charm._get_password()}",
+            f"--requirepass {self.harness.charm.get_password()}",
             "--bind 0.0.0.0",
-            f"--masterauth {self.harness.charm._get_password()}",
+            f"--masterauth {self.harness.charm.get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
             "--appendonly yes",
@@ -365,7 +366,7 @@ class TestCharm(TestCase):
                     "group": "redis",
                     "startup": "enabled",
                     "environment": {
-                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_PASSWORD": self.harness.charm.get_password(),
                     },
                 },
             },
@@ -379,13 +380,41 @@ class TestCharm(TestCase):
         self.assertEqual(self.harness.charm.app.status, ActiveStatus())
         self.assertEqual(self.harness.get_workload_version(), "6.0.11")
 
+        found_sentinel_plan = self.harness.get_container_pebble_plan("sentinel").to_dict()
+        expected_sentinel_plan = {
+            "services": {
+                "sentinel": {
+                    "override": "replace",
+                    "summary": "Sentinel service",
+                    "command": f"redis-server {SENTINEL_CONFIG_PATH} --sentinel",
+                    "user": "redis",
+                    "group": "redis",
+                    "startup": "enabled",
+                },
+            },
+        }
+        self.assertEqual(found_sentinel_plan, expected_sentinel_plan)
+        container = self.harness.model.unit.get_container("sentinel")
+        service = container.get_service("sentinel")
+        self.assertTrue(service.is_running())
+
+        sentinel_container = self.harness.model.unit.get_container("sentinel")
+        sentinel_config = sentinel_container.pull(SENTINEL_CONFIG_PATH).read()
+        self.assertIn("port 0", sentinel_config)
+        self.assertIn(f"tls-port {SENTINEL_PORT}", sentinel_config)
+        self.assertIn(f'tls-cert-file "{WORKING_DIR}redis.crt"', sentinel_config)
+        self.assertIn(f'tls-key-file "{WORKING_DIR}redis.key"', sentinel_config)
+        self.assertIn(f'tls-ca-cert-file "{WORKING_DIR}ca.crt"', sentinel_config)
+        self.assertIn("tls-auth-clients optional", sentinel_config)
+        self.assertIn("tls-replication yes", sentinel_config)
+
     @mock.patch.object(Redis, "execute_command")
     def test_non_leader_unit_as_replica(self, execute_command):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
             mapping = {
-                f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
-                f"SENTINEL MASTER {self.harness.charm._name}": [
+                f"SENTINEL CKQUORUM {self.harness.charm.name}": "OK",
+                f"SENTINEL MASTER {self.harness.charm.name}": [
                     "ip",
                     APPLICATION_DATA["leader-host"],
                     "flags",
@@ -407,9 +436,9 @@ class TestCharm(TestCase):
         leader_hostname = APPLICATION_DATA["leader-host"]
         redis_port = 6379
         extra_flags = [
-            f"--requirepass {self.harness.charm._get_password()}",
+            f"--requirepass {self.harness.charm.get_password()}",
             "--bind 0.0.0.0",
-            f"--masterauth {self.harness.charm._get_password()}",
+            f"--masterauth {self.harness.charm.get_password()}",
             f"--replica-announce-ip {self.harness.charm.unit_pod_hostname}",
             "--logfile /var/log/redis/redis-server.log",
             "--appendonly yes",
@@ -434,7 +463,7 @@ class TestCharm(TestCase):
                     "group": "redis",
                     "startup": "enabled",
                     "environment": {
-                        "REDIS_PASSWORD": self.harness.charm._get_password(),
+                        "REDIS_PASSWORD": self.harness.charm.get_password(),
                     },
                 },
             },
@@ -449,8 +478,8 @@ class TestCharm(TestCase):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
             mapping = {
-                f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
-                f"SENTINEL MASTER {self.harness.charm._name}": [
+                f"SENTINEL CKQUORUM {self.harness.charm.name}": "OK",
+                f"SENTINEL MASTER {self.harness.charm.name}": [
                     "ip",
                     "different-leader",
                     "flags",
@@ -491,8 +520,8 @@ class TestCharm(TestCase):
         # Custom responses to Redis `execute_command` call
         def my_side_effect(value: str):
             mapping = {
-                f"SENTINEL CKQUORUM {self.harness.charm._name}": "OK",
-                f"SENTINEL MASTER {self.harness.charm._name}": [
+                f"SENTINEL CKQUORUM {self.harness.charm.name}": "OK",
+                f"SENTINEL MASTER {self.harness.charm.name}": [
                     "ip",
                     self.harness.charm._k8s_hostname("redis-k8s/1"),
                     "flags",

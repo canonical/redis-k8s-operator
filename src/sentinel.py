@@ -45,14 +45,15 @@ class Sentinel(Object):
 
     def _sentinel_pebble_ready(self, event) -> None:
         """Handle pebble ready event for sentinel container."""
-        self._update_sentinel_layer()
+        self.store_certificates()
+        self.update_sentinel_layer()
 
         # update layer should leave the unit in active status
         if not isinstance(self.charm.unit.status, ActiveStatus):
             event.defer()
             return
 
-    def _update_sentinel_layer(self) -> None:
+    def update_sentinel_layer(self) -> None:
         """Update the Pebble layer.
 
         Checks the current container Pebble layer. If the layer is different
@@ -64,7 +65,7 @@ class Sentinel(Object):
             self.charm.unit.status = WaitingStatus("Waiting for Pebble in sentinel container")
             return
 
-        if not self.charm._valid_app_databag():
+        if not self.charm.valid_app_databag():
             self.charm.unit.status = WaitingStatus("Databag has not been populated")
             return
 
@@ -108,15 +109,36 @@ class Sentinel(Object):
         # render the template file with the correct values.
         rendered = template.render(
             hostname=self.charm.unit_pod_hostname,
-            master_name=self.charm._name,
+            master_name=self.charm.name,
             sentinel_port=SENTINEL_PORT,
             redis_master=self.charm.current_master,
             redis_port=REDIS_PORT,
             quorum=self.expected_quorum,
-            master_password=self.charm._get_password(),
+            master_password=self.charm.get_password(),
             sentinel_password=self.charm.get_sentinel_password(),
+            enable_tls=self.charm.config["enable-tls"],
+            storage_path=self.charm.storage_path,
         )
         self._copy_file(SENTINEL_CONFIG_PATH, rendered, "sentinel")
+
+    def store_certificates(self) -> None:
+        """Copy the TLS certificates to the sentinel container."""
+        # Get a list of valid paths
+        cert_paths = list(filter(None, self.charm.certificates))
+        container = self.charm.unit.get_container("sentinel")
+
+        # Copy the files from the resources location to the sentinel container.
+        # TODO handle error case
+        for cert_path in cert_paths:
+            with open(cert_path, "r") as f:
+                container.push(
+                    (f"{self.charm.storage_path}/{cert_path.name}"),
+                    f,
+                    make_dirs=True,
+                    permissions=0o600,
+                    user="redis",
+                    group="redis",
+                )
 
     def _copy_file(self, path: str, rendered: str, container: str) -> None:
         """Copy a string to a path on a container.
@@ -152,7 +174,7 @@ class Sentinel(Object):
         with self.sentinel_client(host) as sentinel:
             try:
                 # get sentinel info about the master
-                master_info = sentinel.execute_command(f"SENTINEL MASTER {self.charm._name}")
+                master_info = sentinel.execute_command(f"SENTINEL MASTER {self.charm.name}")
 
                 # NOTE: master info from redis comes like a list:
                 # ['key1', 'value1', 'key2', 'value2', ...]
@@ -175,7 +197,7 @@ class Sentinel(Object):
         majority = False
         with self.sentinel_client() as sentinel:
             try:
-                response = sentinel.execute_command(f"SENTINEL CKQUORUM {self.charm._name}")
+                response = sentinel.execute_command(f"SENTINEL CKQUORUM {self.charm.name}")
                 if response.startswith("OK"):
                     logger.info("Own sentinel instance can reach quorum")
                     majority = True
@@ -201,6 +223,8 @@ class Sentinel(Object):
             password=self.charm.get_sentinel_password(),
             socket_timeout=timeout,
             decode_responses=True,
+            ssl=self.charm.config["enable-tls"],
+            ssl_ca_certs=self.charm.retrieve_resource("ca-cert-file"),
         )
         try:
             yield client

@@ -1,4 +1,15 @@
+{% if enable_tls %}
+port 0
+tls-port {{ sentinel_port }}
+tls-cert-file "{{ storage_path }}/redis.crt"
+tls-key-file "{{ storage_path }}/redis.key"
+tls-ca-cert-file "{{ storage_path }}/ca.crt"
+tls-auth-clients optional
+tls-replication yes
+{% else %}
 port {{ sentinel_port }}
+{% endif %}
+
 sentinel monitor {{ master_name }} {{ redis_master }} {{ redis_port }} {{ quorum }}
 sentinel down-after-milliseconds {{ master_name }} 5000
 sentinel failover-timeout {{ master_name }} 30000
